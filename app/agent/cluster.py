@@ -50,7 +50,14 @@ def get_or_create_cluster_id(
                         logger.info(f"Created K8s ConfigMap '{CONFIGMAP_NAME}' with cluster_id: {new_id}")
                         return new_id
                     except ApiException as create_err:
-                        logger.warning(f"Could not create ConfigMap '{CONFIGMAP_NAME}': {create_err}")
+                        if create_err.status == 404:
+                            logger.warning(
+                                f"Could not create ConfigMap '{CONFIGMAP_NAME}' in namespace '{namespace}' (Namespace not found). "
+                                f"Ensure manifests in 'deploy/' are applied via 'kubectl apply -f deploy/'. "
+                                f"Falling back to local file persistence."
+                            )
+                        else:
+                            logger.warning(f"Could not create ConfigMap '{CONFIGMAP_NAME}': {create_err}")
                 else:
                     logger.warning(f"Could not read ConfigMap '{CONFIGMAP_NAME}': {e}")
         except Exception as ex:

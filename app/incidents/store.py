@@ -80,6 +80,7 @@ class IncidentStore:
     def save(self, incident: Incident) -> None:
         """
         Saves or updates an incident in the JSON store.
+        Enforces invariant that at most ONE OPEN incident exists for a given resource UID or identity_key.
         """
         with self.lock:
             incidents_data = self._read_json()
@@ -89,7 +90,25 @@ class IncidentStore:
                     incidents_data[i] = incident.to_dict()
                     updated = True
                     break
+
             if not updated:
+                if incident.status == "OPEN":
+                    for item in incidents_data:
+                        if item.get("status") == "OPEN":
+                            res = item.get("resource", {})
+                            same_res = (
+                                res.get("namespace") == incident.resource.namespace
+                                and res.get("kind") == incident.resource.kind
+                                and res.get("uid") == incident.resource.uid
+                            )
+                            same_key = item.get("identity_key") == incident.identity_key
+                            if same_res or same_key:
+                                logger.warning(
+                                    f"Prevented duplicate active incident creation for {incident.resource.namespace}/{incident.resource.name} "
+                                    f"(existing={item.get('incident_id')}, duplicate_rejected={incident.incident_id})"
+                                )
+                                return
+
                 incidents_data.append(incident.to_dict())
 
             self._write_json(incidents_data)
@@ -111,6 +130,28 @@ class IncidentStore:
             for item in incidents_data:
                 if item.get("identity_key") == identity_key and item.get("status") == "OPEN":
                     return Incident.from_dict(item)
+        return None
+
+    def find_open_for_resource(
+        self, namespace: str, kind: str, uid: str, identity_key: Optional[str] = None
+    ) -> Optional[Incident]:
+        """
+        Looks for an active (OPEN) incident matching the resource UID or deduplication identity key.
+        Guarantees at most one active incident per Kubernetes resource instance.
+        """
+        with self.lock:
+            incidents_data = self._read_json()
+            for item in incidents_data:
+                if item.get("status") == "OPEN":
+                    res = item.get("resource", {})
+                    same_uid = (
+                        res.get("namespace") == namespace
+                        and res.get("kind") == kind
+                        and res.get("uid") == uid
+                    )
+                    same_key = identity_key and item.get("identity_key") == identity_key
+                    if same_uid or same_key:
+                        return Incident.from_dict(item)
         return None
 
     def list_all(self) -> List[Incident]:
