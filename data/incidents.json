@@ -1,0 +1,118 @@
+[
+  {
+    "incident_id": "INC-0001",
+    "status": "RESOLVED",
+    "resource": {
+      "kind": "Pod",
+      "name": "broken-nginx",
+      "namespace": "default",
+      "uid": "uid-broken-nginx"
+    },
+    "category": "ErrImagePull",
+    "current_state": "app: ImagePullBackOff (Container failed with ImagePullBackOff)",
+    "occurrences": 2,
+    "created_at": "2026-08-08T11:48:09.758731+00:00",
+    "updated_at": "2026-08-08T11:48:11.761914+00:00",
+    "last_seen": "2026-08-08T11:48:11.761914+00:00",
+    "resolved_at": "2026-08-08T11:48:11.761914+00:00",
+    "state_history": [
+      "ErrImagePull",
+      "ImagePullBackOff",
+      "Running"
+    ],
+    "evidence": [],
+    "diagnosis": {
+      "incident_category": "ImagePullFailure",
+      "severity": "MEDIUM",
+      "root_cause": "Image pull failure due to network timeout or inaccessible container registry.",
+      "evidence": "State: app: ImagePullBackOff (Container failed with ImagePullBackOff) | Events: 0 events collected"
+    },
+    "recommendations": [
+      "Verify the container image repository path and tag spelling in Pod spec.",
+      "Ensure image exists in registry or pull secret is configured in pod/namespace.",
+      "Check cluster egress network rules or registry accessibility."
+    ],
+    "identity_key": "default:Pod:uid-broken-nginx:ImagePullFailure"
+  },
+  {
+    "incident_id": "INC-0002",
+    "status": "RESOLVED",
+    "resource": {
+      "kind": "Pod",
+      "name": "broken-nginx",
+      "namespace": "default",
+      "uid": "uid-broken-nginx"
+    },
+    "category": "ErrImagePull",
+    "current_state": "app: ImagePullBackOff (Container failed with ImagePullBackOff)",
+    "occurrences": 2,
+    "created_at": "2026-08-08T12:16:29.386595+00:00",
+    "updated_at": "2026-08-08T12:16:31.391627+00:00",
+    "last_seen": "2026-08-08T12:16:31.391627+00:00",
+    "resolved_at": "2026-08-08T12:16:31.391627+00:00",
+    "state_history": [
+      "ErrImagePull",
+      "ImagePullBackOff",
+      "Running"
+    ],
+    "evidence": [],
+    "diagnosis": {
+      "incident_category": "ImagePullFailure",
+      "severity": "MEDIUM",
+      "root_cause": "Image pull failure due to network timeout or inaccessible container registry.",
+      "evidence": "State: app: ImagePullBackOff (Container failed with ImagePullBackOff) | Events: 0 events collected"
+    },
+    "recommendations": [
+      "Verify the container image repository path and tag spelling in Pod spec.",
+      "Ensure image exists in registry or pull secret is configured in pod/namespace.",
+      "Check cluster egress network rules or registry accessibility."
+    ],
+    "investigation": {
+      "incident_id": "INC-0002",
+      "target": {
+        "kind": "Pod",
+        "name": "broken-nginx",
+        "namespace": "default",
+        "uid": "uid-broken-nginx"
+      },
+      "pod": {
+        "name": "broken-nginx",
+        "namespace": "default",
+        "uid": "uid-broken-nginx",
+        "creation_timestamp": "",
+        "labels": {},
+        "annotations": {},
+        "owner_references": [],
+        "phase": "Pending",
+        "pod_ip": "",
+        "host_ip": "",
+        "node_name": "",
+        "start_time": "",
+        "conditions": [],
+        "containers": [],
+        "init_containers": [],
+        "volumes": []
+      },
+      "controllers": [],
+      "deployment": {},
+      "replicaset": {},
+      "services": [],
+      "service": {},
+      "endpoints": [],
+      "node": {},
+      "storage": {},
+      "configmaps": [],
+      "secrets": [],
+      "events": [],
+      "relationships": [],
+      "findings": [],
+      "collector_status": {
+        "pod": "SUCCESS",
+        "controller": "SUCCESS",
+        "service": "SUCCESS",
+        "events": "SUCCESS"
+      }
+    },
+    "identity_key": "default:Pod:uid-broken-nginx:ImagePullFailure"
+  }
+]

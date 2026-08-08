@@ -1,0 +1,53 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: skyops-agent-role
+  labels:
+    app.kubernetes.io/name: skyops-agent
+rules:
+  # Core Workload API Resources (Strictly Read-Only)
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/log
+      - events
+      - nodes
+      - services
+      - endpoints
+      - persistentvolumeclaims
+      - persistentvolumes
+    verbs: ["get", "list", "watch"]
+
+  # ConfigMaps in Agent Namespace (For Cluster ID Persistence)
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+  # Apps API Group (Read-Only)
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - replicasets
+      - statefulsets
+      - daemonsets
+    verbs: ["get", "list", "watch"]
+
+  # Batch API Group (Read-Only)
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - cronjobs
+    verbs: ["get", "list", "watch"]
+
+  # Storage API Group (Read-Only)
+  - apiGroups: ["storage.k8s.io"]
+    resources:
+      - storageclasses
+    verbs: ["get", "list", "watch"]
+
+  # Discovery API Group (Read-Only)
+  - apiGroups: ["discovery.k8s.io"]
+    resources:
+      - endpointslices
+    verbs: ["get", "list", "watch"]

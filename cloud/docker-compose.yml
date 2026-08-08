@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  skyops-api:
+    build:
+      context: ..
+      dockerfile: cloud/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://skyops:password@postgres:5432/skyops
+      - SKYOPS_ENV=development
+      - LOG_LEVEL=INFO
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: skyops
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: skyops
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skyops -d skyops"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: skyops-agent
+  namespace: skyops
+  labels:
+    app.kubernetes.io/name: skyops-agent
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http-health
+  selector:
+    app.kubernetes.io/name: skyops-agent

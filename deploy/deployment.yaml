@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skyops-agent
+  namespace: skyops
+  labels:
+    app.kubernetes.io/name: skyops-agent
+    app.kubernetes.io/component: agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: skyops-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: skyops-agent
+        app.kubernetes.io/component: agent
+    spec:
+      serviceAccountName: skyops-agent-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: skyops-agent
+          image: skyops-agent:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "app.agent.main"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - containerPort: 8080
+              name: http-health
+          env:
+            - name: SKYOPS_AGENT_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: SKYOPS_AGENT_PORT
+              value: "8080"
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: skyops-secrets
+                  key: GEMINI_API_KEY
+                  optional: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: data-dir
+              mountPath: /app/data
+      volumes:
+        - name: data-dir
+          emptyDir: {}
