@@ -37,6 +37,7 @@ class Incident:
     recommendations: List[str] = field(default_factory=list)
     investigation: Dict[str, Any] = field(default_factory=dict)
     identity_key: str = ""
+    last_canonical_state: str = ""
     ai_analysis: Optional[Dict[str, Any]] = None
     ai_status: str = "NOT_ANALYZED"
     ai_updated_at: Optional[str] = None
@@ -86,6 +87,7 @@ class Incident:
             "recommendations": self.recommendations,
             "investigation": self.investigation,
             "identity_key": self.identity_key,
+            "last_canonical_state": self.last_canonical_state,
             "ai_analysis": self.ai_analysis,
             "ai_status": self.ai_status,
             "ai_updated_at": self.ai_updated_at,
@@ -118,6 +120,7 @@ class Incident:
             recommendations=data.get("recommendations", []),
             investigation=data.get("investigation", {}),
             identity_key=data.get("identity_key", ""),
+            last_canonical_state=data.get("last_canonical_state", ""),
             ai_analysis=data.get("ai_analysis"),
             ai_status=data.get("ai_status", "NOT_ANALYZED"),
             ai_updated_at=data.get("ai_updated_at"),

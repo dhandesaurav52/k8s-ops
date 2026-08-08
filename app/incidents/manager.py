@@ -14,6 +14,40 @@ from app.kubernetes.collector import collect_pod_events, get_pod_unhealthy_state
 logger = logging.getLogger("SkyOps.IncidentManager")
 
 
+def compute_pod_canonical_state(pod: Any, primary_reason: str, current_state: str) -> str:
+    """
+    Computes a deterministic canonical state string for a Pod's current incident state.
+    Ignores volatile metadata like resourceVersion, event timestamps, watch timestamps.
+    """
+    if not pod or not hasattr(pod, "metadata") or not pod.metadata:
+        return f"reason={primary_reason}|state={current_state}"
+
+    uid = getattr(pod.metadata, "uid", "") or ""
+    phase = getattr(getattr(pod, "status", None), "phase", "") or "Unknown"
+
+    container_details = []
+    if hasattr(pod, "status") and pod.status:
+        container_statuses = (getattr(pod.status, "container_statuses", None) or []) + \
+                             (getattr(pod.status, "init_container_statuses", None) or [])
+        for cs in container_statuses:
+            c_name = getattr(cs, "name", "unknown")
+            state = getattr(cs, "state", None)
+            if state:
+                waiting = getattr(state, "waiting", None)
+                terminated = getattr(state, "terminated", None)
+                if waiting and getattr(waiting, "reason", None):
+                    reason = getattr(waiting, "reason", "")
+                    msg = getattr(waiting, "message", "") or ""
+                    container_details.append(f"{c_name}:waiting:{reason}:{msg}")
+                elif terminated and (getattr(terminated, "reason", None) or getattr(terminated, "exit_code", None) is not None):
+                    reason = getattr(terminated, "reason", "") or f"ExitCode{getattr(terminated, 'exit_code', '')}"
+                    msg = getattr(terminated, "message", "") or ""
+                    container_details.append(f"{c_name}:terminated:{reason}:{msg}")
+
+    c_str = "|".join(sorted(container_details)) if container_details else current_state
+    return f"uid={uid}|phase={phase}|reason={primary_reason}|containers={c_str}"
+
+
 class IncidentManager:
     """
     Core Incident Lifecycle Engine.
@@ -67,11 +101,23 @@ class IncidentManager:
         # SCENARIO A: Workload is UNHEALTHY
         # -------------------------------------------------------------
         if is_unhealthy:
-            events = collect_pod_events(self.k8s_client, namespace, name, uid)
-            diagnosis, recommendations = DiagnosisEngine.diagnose(primary_reason, current_state, events)
+            canonical_state = compute_pod_canonical_state(pod, primary_reason, current_state)
 
             if existing_incident:
-                # Deduplication & Update
+                prev_canonical = (
+                    existing_incident.last_canonical_state
+                    or f"uid={uid}|phase={getattr(getattr(pod, 'status', None), 'phase', '') or 'Unknown'}|reason={existing_incident.category}|containers={existing_incident.current_state}"
+                )
+
+                # State comparison: ignore if canonical state is identical
+                if canonical_state == prev_canonical:
+                    logger.debug(
+                        f"Ignoring duplicate Kubernetes event for {namespace}/{name} (State unchanged: {primary_reason})"
+                    )
+                    return existing_incident
+
+                # Meaningful state transition / update
+                existing_incident.last_canonical_state = canonical_state
                 existing_incident.occurrences += 1
                 existing_incident.last_seen = utc_now_iso()
                 existing_incident.updated_at = utc_now_iso()
@@ -81,6 +127,8 @@ class IncidentManager:
                     existing_incident.state_history.append(primary_reason)
 
                 existing_incident.current_state = current_state
+                events = collect_pod_events(self.k8s_client, namespace, name, uid)
+                diagnosis, recommendations = DiagnosisEngine.diagnose(primary_reason, current_state, events)
                 existing_incident.evidence = events
                 existing_incident.diagnosis = diagnosis
                 existing_incident.recommendations = recommendations
@@ -99,6 +147,8 @@ class IncidentManager:
                 return existing_incident
             else:
                 # Create NEW Incident
+                events = collect_pod_events(self.k8s_client, namespace, name, uid)
+                diagnosis, recommendations = DiagnosisEngine.diagnose(primary_reason, current_state, events)
                 new_id = self.store.generate_next_id()
                 new_incident = Incident(
                     incident_id=new_id,
@@ -115,6 +165,7 @@ class IncidentManager:
                     diagnosis=diagnosis,
                     recommendations=recommendations,
                     identity_key=identity_key,
+                    last_canonical_state=canonical_state,
                 )
 
                 # Run Deep Investigation
@@ -148,6 +199,7 @@ class IncidentManager:
                 open_inc.resolved_at = now_str
                 open_inc.updated_at = now_str
                 open_inc.last_seen = now_str
+                open_inc.last_canonical_state = "RESOLVED"
                 if not open_inc.state_history or open_inc.state_history[-1] != "Running":
                     open_inc.state_history.append("Running")
 
