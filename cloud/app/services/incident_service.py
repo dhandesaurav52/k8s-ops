@@ -64,6 +64,18 @@ class IncidentService:
             db, data.cluster_id, data.incident_id
         )
 
+        # 2b. If not found by incident_id, check for active OPEN incident on same resource_uid
+        if not existing and data.resource_uid:
+            existing = (
+                db.query(Incident)
+                .filter(
+                    Incident.cluster_id == data.cluster_id,
+                    Incident.resource_uid == data.resource_uid,
+                    Incident.status == "OPEN",
+                )
+                .first()
+            )
+
         if existing:
             # Update existing
             existing.category = data.category

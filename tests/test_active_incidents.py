@@ -188,3 +188,84 @@ def test_store_invariant_at_most_one_open_incident():
         open_incidents = [i for i in store.list_all() if i.status == "OPEN"]
         assert len(open_incidents) == 1
         assert open_incidents[0].incident_id == "INC-0001"
+
+
+def test_critical_persistence_one_open_incident_across_reloads():
+    """Critical Persistence Test: Enforce one open incident invariant across repeated saves and store reloads."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        json_path = Path(tmpdir) / "incidents.json"
+        store = IncidentStore(json_path)
+        manager = IncidentManager(store=store)
+
+        pod = mock_pod(waiting_reason="ImagePullBackOff", uid="uid-abc123")
+
+        for i in range(10):
+            inc = manager.process_pod_event("MODIFIED", pod)
+            open_for_uid = [item for item in store.list_all() if item.status == "OPEN" and item.resource.uid == "uid-abc123"]
+            assert len(open_for_uid) == 1, f"Iteration {i}: Expected 1 open incident, found {len(open_for_uid)}"
+            assert open_for_uid[0].incident_id == "INC-0001"
+
+        # Reload store from disk
+        reloaded_store = IncidentStore(json_path)
+        reloaded_open = [item for item in reloaded_store.list_all() if item.status == "OPEN" and item.resource.uid == "uid-abc123"]
+        assert len(reloaded_open) == 1
+        assert reloaded_open[0].incident_id == "INC-0001"
+
+
+def test_restart_manager_and_reload_store():
+    """Restart Test: Destroy IncidentManager / reload Store and re-process identical event."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        json_path = Path(tmpdir) / "incidents.json"
+
+        # Session 1
+        store1 = IncidentStore(json_path)
+        manager1 = IncidentManager(store=store1)
+        pod = mock_pod(waiting_reason="ImagePullBackOff", uid="uid-restart-1")
+
+        inc1 = manager1.process_pod_event("MODIFIED", pod)
+        assert inc1.incident_id == "INC-0001"
+        assert inc1.occurrences == 1
+
+        # Simulate restart by destroying manager and reloading store from disk
+        del manager1
+        del store1
+
+        store2 = IncidentStore(json_path)
+        manager2 = IncidentManager(store=store2)
+
+        # Process identical event
+        inc2 = manager2.process_pod_event("ADDED", pod)
+        assert inc2.incident_id == "INC-0001"
+        assert inc2.occurrences == 1
+
+        all_incidents = store2.list_all()
+        assert len(all_incidents) == 1
+        assert all_incidents[0].incident_id == "INC-0001"
+        assert all_incidents[0].status == "OPEN"
+
+
+def test_live_watch_startup_replay():
+    """Live Watch Startup Test: Replaying existing pods on watch reconnect does not duplicate incidents."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        json_path = Path(tmpdir) / "incidents.json"
+        store = IncidentStore(json_path)
+        manager = IncidentManager(store=store)
+
+        pod = mock_pod(name="skyops-dedup-test", uid="uid-replay-1", waiting_reason="ImagePullBackOff")
+
+        # Initial event
+        inc = manager.process_pod_event("ADDED", pod)
+        assert inc.incident_id == "INC-0001"
+        assert inc.occurrences == 1
+
+        # Simulate watcher reconnect sending initial list of existing pods (ADDED)
+        for _ in range(5):
+            replayed_inc = manager.process_pod_event("ADDED", pod)
+            assert replayed_inc.incident_id == "INC-0001"
+            assert replayed_inc.occurrences == 1
+
+        open_incidents = [item for item in store.list_all() if item.status == "OPEN"]
+        assert len(open_incidents) == 1
+        assert open_incidents[0].incident_id == "INC-0001"
+        assert open_incidents[0].occurrences == 1
+

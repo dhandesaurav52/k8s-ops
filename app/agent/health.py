@@ -14,6 +14,8 @@ class AgentHealthRequestHandler(BaseHTTPRequestHandler):
 
     # Class-level state shared across requests
     k8s_connected: bool = False
+    cloud_connected: bool = False
+    cloud_mode: str = "stub"
     cluster_id: str = "unknown"
 
     def log_message(self, format, *args):
@@ -29,6 +31,8 @@ class AgentHealthRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response).encode("utf-8"))
 
         elif self.path == "/ready":
+            # Agent readiness depends on K8s API connectivity.
+            # Cloud disconnection NEVER causes /ready probe to fail.
             if AgentHealthRequestHandler.k8s_connected:
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -36,6 +40,8 @@ class AgentHealthRequestHandler(BaseHTTPRequestHandler):
                 response = {
                     "status": "ready",
                     "kubernetes": "connected",
+                    "cloud": "connected" if AgentHealthRequestHandler.cloud_connected else "disconnected",
+                    "cloud_mode": AgentHealthRequestHandler.cloud_mode,
                     "cluster_id": AgentHealthRequestHandler.cluster_id,
                 }
             else:
@@ -70,6 +76,10 @@ class HealthServer:
     def set_k8s_status(self, connected: bool, cluster_id: str = "unknown"):
         AgentHealthRequestHandler.k8s_connected = connected
         AgentHealthRequestHandler.cluster_id = cluster_id
+
+    def set_cloud_status(self, connected: bool, mode: str = "cloud"):
+        AgentHealthRequestHandler.cloud_connected = connected
+        AgentHealthRequestHandler.cloud_mode = mode
 
     def start(self):
         try:

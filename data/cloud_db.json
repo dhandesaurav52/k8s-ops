@@ -1,0 +1,323 @@
+{
+  "clusters": [
+    {
+      "cluster_id": "skyops-cluster-prod-us",
+      "name": "prod-us-east-1a",
+      "status": "CONNECTED",
+      "kubernetes_version": "v1.28.4-gke",
+      "node_count": 8,
+      "pod_count": 142,
+      "namespace_count": 12,
+      "agent_status": "HEALTHY",
+      "created_at": "2026-08-09T03:28:18.219Z",
+      "updated_at": "2026-08-09T03:28:27.566Z",
+      "last_seen": "2026-08-09T03:28:27.566Z"
+    },
+    {
+      "cluster_id": "skyops-cluster-staging-eu",
+      "name": "staging-eu-west-1",
+      "status": "CONNECTED",
+      "kubernetes_version": "v1.29.1-k3s",
+      "node_count": 4,
+      "pod_count": 58,
+      "namespace_count": 6,
+      "agent_status": "HEALTHY",
+      "created_at": "2026-08-09T03:28:18.219Z",
+      "updated_at": "2026-08-09T03:28:18.219Z",
+      "last_seen": "2026-08-09T03:28:18.219Z"
+    },
+    {
+      "cluster_id": "skyops-cluster-dev-local",
+      "name": "local-minikube",
+      "status": "STUB",
+      "kubernetes_version": "v1.27.2",
+      "node_count": 1,
+      "pod_count": 18,
+      "namespace_count": 3,
+      "agent_status": "LOCAL_DEV",
+      "created_at": "2026-08-09T03:28:18.219Z",
+      "updated_at": "2026-08-09T03:28:18.219Z",
+      "last_seen": "2026-08-09T03:28:18.219Z"
+    }
+  ],
+  "incidents": [
+    {
+      "id": 10,
+      "cluster_id": "skyops-cluster-prod-us",
+      "incident_id": "INC-9999",
+      "category": "OOMKilled",
+      "status": "OPEN",
+      "current_state": "",
+      "severity": "MEDIUM",
+      "occurrences": 1,
+      "resource_kind": "Pod",
+      "resource_namespace": "default",
+      "resource_name": "test-pod",
+      "resource_uid": "",
+      "diagnosis": {},
+      "investigation": {},
+      "ai_analysis": {},
+      "state_history": [
+        "OOMKilled"
+      ],
+      "first_seen": "2026-08-09T03:28:27.566Z",
+      "last_seen": "2026-08-09T03:28:27.566Z",
+      "created_at": "2026-08-09T03:28:27.566Z",
+      "updated_at": "2026-08-09T03:28:27.566Z",
+      "resolved_at": null
+    },
+    {
+      "id": 1,
+      "cluster_id": "skyops-cluster-prod-us",
+      "incident_id": "INC-0842",
+      "category": "OOMKilled",
+      "status": "RESOLVED",
+      "current_state": "app-service: OOMKilled (Exit Code 137, Restarts: 14)",
+      "severity": "CRITICAL",
+      "occurrences": 14,
+      "first_seen": "2026-08-09T02:43:18.219Z",
+      "last_seen": "2026-08-09T03:27:48.219Z",
+      "created_at": "2026-08-09T02:43:18.219Z",
+      "updated_at": "2026-08-09T03:28:24.582Z",
+      "resolved_at": "2026-08-09T03:28:24.582Z",
+      "resource_kind": "Pod",
+      "resource_namespace": "payments",
+      "resource_name": "payment-processor-79d8b8584f-x2k9l",
+      "resource_uid": "uid-pay-proc-882194",
+      "diagnosis": {
+        "category": "OOMKilled",
+        "severity": "CRITICAL",
+        "confidence": 0.96,
+        "reason": "Container process memory limit exceeded",
+        "root_cause": "The payment-processor container exceeded its configured memory limit of 512Mi (peak RSS observed: 524Mi) during payload batching. The Linux kernel OOM-killer terminated process PID 1 with exit code 137.",
+        "actionable_recommendation": "Increase container memory limit in Deployment spec from 512Mi to 1Gi.",
+        "mitigation_command": "kubectl patch deployment payment-processor -n payments --type=json -p='[{\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/resources/limits/memory\", \"value\": \"1Gi\"}]'"
+      },
+      "investigation": {
+        "pod_phase": "Running",
+        "node_name": "gke-prod-pool-1-8a9d02",
+        "pod_ip": "10.244.2.89",
+        "container_states": [
+          {
+            "name": "payment-processor",
+            "image": "registry.internal.net/payments/processor:v2.14.1",
+            "ready": false,
+            "restart_count": 14,
+            "state_type": "terminated",
+            "reason": "OOMKilled",
+            "exit_code": 137
+          }
+        ],
+        "kubernetes_events": [
+          {
+            "type": "Warning",
+            "reason": "Unhealthy",
+            "message": "Liveness probe failed",
+            "count": 8,
+            "last_timestamp": "2026-08-09T03:28:18.219Z"
+          },
+          {
+            "type": "Warning",
+            "reason": "OOMKilling",
+            "message": "Memory cgroup out of memory: Killed process 31920",
+            "count": 14,
+            "last_timestamp": "2026-08-09T03:28:18.219Z"
+          }
+        ],
+        "recent_logs": [
+          "[INFO] Processing batch settlement payload ID: #SETT-88912",
+          "[WARN] Heap allocation high: 489.2MB / 512.0MB (95.5% utilization)",
+          "[FATAL] KERNEL: OOM-killer invoker: task=node, pid=31920"
+        ],
+        "metrics_summary": {
+          "cpu_usage_mcores": 210,
+          "memory_usage_mb": 512,
+          "memory_limit_mb": 512
+        }
+      },
+      "ai_analysis": {
+        "status": "COMPLETED",
+        "summary": "Critical OOMKilled cascade on payment-processor pod due to unexpected spike in settlement payload size exceeding 512Mi limit.",
+        "detailed_explanation": "Analysis confirms CGroups SIGKILL triggered by memory exhaustion on gke-prod-pool-1-8a9d02.",
+        "probable_causes": [
+          "Memory limit set too low (512Mi)",
+          "In-memory buffer leak in reconciliation library"
+        ],
+        "remediation_steps": [
+          "Patch Deployment limits to 1.5Gi memory limit.",
+          "Apply vertical pod autoscaler."
+        ],
+        "suggested_kubectl": [
+          "kubectl describe pod payment-processor-79d8b8584f-x2k9l -n payments"
+        ],
+        "analyzed_at": "2026-08-09T03:28:18.219Z"
+      },
+      "state_history": [
+        "Pending",
+        "Running",
+        "OOMKilled",
+        "Resolved"
+      ]
+    },
+    {
+      "id": 2,
+      "cluster_id": "skyops-cluster-prod-us",
+      "incident_id": "INC-0841",
+      "category": "ImagePullFailure",
+      "status": "OPEN",
+      "current_state": "auth-gateway: ErrImagePull (Failed to pull image \"registry.internal.net/auth/gateway:v3.0.0-rc1\")",
+      "severity": "HIGH",
+      "occurrences": 6,
+      "first_seen": "2026-08-09T01:28:18.219Z",
+      "last_seen": "2026-08-09T03:23:18.219Z",
+      "created_at": "2026-08-09T01:28:18.219Z",
+      "updated_at": "2026-08-09T03:23:18.219Z",
+      "resolved_at": null,
+      "resource_kind": "Pod",
+      "resource_namespace": "authentication",
+      "resource_name": "auth-gateway-6d7c4f4b9d-4m87q",
+      "resource_uid": "uid-auth-gate-99120",
+      "diagnosis": {
+        "category": "ImagePullFailure",
+        "severity": "HIGH",
+        "confidence": 0.98,
+        "reason": "Container image tag or pull secret invalid",
+        "root_cause": "Registry returned HTTP 404 for image tag v3.0.0-rc1.",
+        "actionable_recommendation": "Revert deployment image tag to v2.9.4.",
+        "mitigation_command": "kubectl set image deployment/auth-gateway auth-gateway=registry.internal.net/auth/gateway:v2.9.4 -n authentication"
+      },
+      "investigation": {
+        "pod_phase": "Pending",
+        "node_name": "gke-prod-pool-1-8a9d03",
+        "pod_ip": "10.244.3.112",
+        "container_states": [
+          {
+            "name": "auth-gateway",
+            "image": "registry.internal.net/auth/gateway:v3.0.0-rc1",
+            "ready": false,
+            "restart_count": 0,
+            "state_type": "waiting",
+            "reason": "ImagePullBackOff"
+          }
+        ],
+        "kubernetes_events": [
+          {
+            "type": "Warning",
+            "reason": "Failed",
+            "message": "Failed to pull image: manifest unknown",
+            "count": 4,
+            "last_timestamp": "2026-08-09T03:28:18.219Z"
+          }
+        ],
+        "recent_logs": [],
+        "metrics_summary": {
+          "cpu_usage_mcores": 0,
+          "memory_usage_mb": 0,
+          "memory_limit_mb": 256
+        }
+      },
+      "ai_analysis": {
+        "status": "COMPLETED",
+        "summary": "Image pull error blocking deployment rollouts on auth-gateway service.",
+        "detailed_explanation": "Tag v3.0.0-rc1 is missing in the internal container registry.",
+        "probable_causes": [
+          "CI pipeline tag push failed",
+          "Typo in image tag"
+        ],
+        "remediation_steps": [
+          "Rollback deployment image spec to v2.9.4"
+        ],
+        "suggested_kubectl": [
+          "kubectl rollout undo deployment/auth-gateway -n authentication"
+        ],
+        "analyzed_at": "2026-08-09T03:28:18.219Z"
+      },
+      "state_history": [
+        "Pending",
+        "ErrImagePull",
+        "ImagePullBackOff"
+      ]
+    },
+    {
+      "id": 3,
+      "cluster_id": "skyops-cluster-staging-eu",
+      "incident_id": "INC-0839",
+      "category": "CrashLoopBackOff",
+      "status": "OPEN",
+      "current_state": "redis-cache: CrashLoopBackOff (Back-off restarting failed container)",
+      "severity": "MEDIUM",
+      "occurrences": 9,
+      "first_seen": "2026-08-09T00:28:18.219Z",
+      "last_seen": "2026-08-09T03:26:18.219Z",
+      "created_at": "2026-08-09T00:28:18.219Z",
+      "updated_at": "2026-08-09T03:26:18.219Z",
+      "resolved_at": null,
+      "resource_kind": "Pod",
+      "resource_namespace": "cache",
+      "resource_name": "redis-master-0",
+      "resource_uid": "uid-redis-sts-001",
+      "diagnosis": {
+        "category": "CrashLoopBackOff",
+        "severity": "MEDIUM",
+        "confidence": 0.94,
+        "reason": "Configuration file parse error",
+        "root_cause": "Invalid directive maxmemory-policy-v2 on line 42 of redis.conf.",
+        "actionable_recommendation": "Fix ConfigMap syntax error, then restart pod.",
+        "mitigation_command": "kubectl rollout restart statefulset/redis-master -n cache"
+      },
+      "investigation": {
+        "pod_phase": "Running",
+        "node_name": "staging-worker-02",
+        "pod_ip": "10.244.1.42",
+        "container_states": [
+          {
+            "name": "redis",
+            "image": "redis:7.2-alpine",
+            "ready": false,
+            "restart_count": 9,
+            "state_type": "waiting",
+            "reason": "CrashLoopBackOff"
+          }
+        ],
+        "kubernetes_events": [
+          {
+            "type": "Warning",
+            "reason": "BackOff",
+            "message": "Back-off restarting failed container",
+            "count": 24,
+            "last_timestamp": "2026-08-09T03:28:18.219Z"
+          }
+        ],
+        "recent_logs": [
+          "Fatal error: Bad directive \"maxmemory-policy-v2\" on line 42"
+        ],
+        "metrics_summary": {
+          "cpu_usage_mcores": 5,
+          "memory_usage_mb": 12,
+          "memory_limit_mb": 256
+        }
+      },
+      "ai_analysis": {
+        "status": "COMPLETED",
+        "summary": "Redis cache master crashing continuously due to invalid configuration directive.",
+        "detailed_explanation": "Syntax error in redis.conf mounted from ConfigMap redis-config.",
+        "probable_causes": [
+          "ConfigMap edit error during staging maintenance"
+        ],
+        "remediation_steps": [
+          "Update ConfigMap and delete pod to trigger re-creation"
+        ],
+        "suggested_kubectl": [
+          "kubectl edit configmap redis-config -n cache"
+        ],
+        "analyzed_at": "2026-08-09T03:28:18.219Z"
+      },
+      "state_history": [
+        "Running",
+        "Terminated",
+        "CrashLoopBackOff"
+      ]
+    }
+  ],
+  "nextIncidentDbId": 11
+}

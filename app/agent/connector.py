@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 import logging
-from typing import Any, Dict
+import os
+import time
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger("SkyOps.ClusterConnector")
 
@@ -42,6 +44,149 @@ class LocalDevelopmentConnector(ClusterConnector):
         return True
 
     def send_incident(self, incident: Any) -> bool:
-        inc_id = getattr(incident, "incident_id", "INC-UNKNOWN")
+        if isinstance(incident, dict):
+            inc_id = incident.get("incident_id", "INC-UNKNOWN")
+        else:
+            inc_id = getattr(incident, "incident_id", "INC-UNKNOWN")
         logger.info(f"[StubConnector] Incident '{inc_id}' reported (Stub mode).")
         return True
+
+
+class CloudConnector(ClusterConnector):
+    """
+    Production-capable CloudConnector that communicates with SkyOps Cloud Backend via HTTPS.
+    Supports secure token authentication, transient retries with exponential backoff,
+    and credential redaction in logs.
+    """
+
+    def __init__(
+        self,
+        cloud_url: Optional[str] = None,
+        agent_token: Optional[str] = None,
+        timeout: float = 10.0,
+        max_retries: int = 3,
+        backoff_factor: float = 0.5,
+    ):
+        self.cloud_url = (cloud_url or os.getenv("SKYOPS_CLOUD_URL", "http://localhost:8000")).rstrip("/")
+        self.agent_token = agent_token or os.getenv("SKYOPS_AGENT_TOKEN", "")
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.backoff_factor = backoff_factor
+        self.registered = False
+
+    def _redact(self, text: str) -> str:
+        """Redact security tokens from log and exception strings."""
+        if self.agent_token and self.agent_token in text:
+            return text.replace(self.agent_token, "[REDACTED_TOKEN]")
+        return text
+
+    def _get_headers(self) -> Dict[str, str]:
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "SkyOps-Agent/1.0",
+        }
+        if self.agent_token:
+            headers["Authorization"] = f"Bearer {self.agent_token}"
+        return headers
+
+    def register(self, cluster_info: Dict[str, Any]) -> bool:
+        """Register or synchronize cluster metadata with SkyOps Cloud."""
+        payload = {
+            "cluster_id": cluster_info.get("cluster_id", "unknown"),
+            "name": cluster_info.get("name", cluster_info.get("cluster_name", "unknown")),
+            "kubernetes_version": str(cluster_info.get("kubernetes_version", "unknown")),
+            "status": "CONNECTED",
+            "node_count": int(cluster_info.get("nodes", cluster_info.get("node_count", 0))),
+            "pod_count": int(cluster_info.get("pods", cluster_info.get("pod_count", 0))),
+            "namespace_count": int(cluster_info.get("namespaces", cluster_info.get("namespace_count", 0))),
+        }
+
+        success = self._post("/api/v1/clusters", payload)
+        if success:
+            self.registered = True
+            logger.info(f"Successfully registered cluster '{payload['cluster_id']}' with SkyOps Cloud.")
+        else:
+            logger.warning(f"Failed to register cluster '{payload['cluster_id']}' with SkyOps Cloud.")
+        return success
+
+    def send_incident(self, incident: Any) -> bool:
+        """Send or update an incident on SkyOps Cloud."""
+        if isinstance(incident, dict):
+            payload = incident
+        else:
+            payload = {
+                "cluster_id": getattr(incident, "cluster_id", os.getenv("SKYOPS_CLUSTER_ID", "unknown")),
+                "incident_id": getattr(incident, "incident_id", "INC-UNKNOWN"),
+                "resource_kind": getattr(getattr(incident, "resource", None), "kind", "Pod"),
+                "resource_namespace": getattr(getattr(incident, "resource", None), "namespace", "default"),
+                "resource_name": getattr(getattr(incident, "resource", None), "name", "unknown"),
+                "resource_uid": getattr(getattr(incident, "resource", None), "uid", ""),
+                "category": getattr(incident, "category", "Unknown"),
+                "status": getattr(incident, "status", "OPEN"),
+                "current_state": getattr(incident, "current_state", ""),
+                "severity": getattr(incident, "severity", "MEDIUM"),
+                "occurrences": getattr(incident, "occurrences", 1),
+                "diagnosis": getattr(incident, "diagnosis", {}) or {},
+                "investigation": getattr(incident, "investigation", {}) or {},
+                "ai_analysis": getattr(incident, "ai_analysis", {}) or {},
+                "state_history": getattr(incident, "state_history", []) or [],
+            }
+
+        inc_id = payload.get("incident_id", "INC-UNKNOWN")
+        success = self._post("/api/v1/incidents", payload)
+        if success:
+            logger.info(f"Successfully synchronized incident '{inc_id}' to SkyOps Cloud.")
+        else:
+            logger.warning(f"Failed to synchronize incident '{inc_id}' to SkyOps Cloud.")
+        return success
+
+    def _post(self, endpoint: str, data: Dict[str, Any]) -> bool:
+        """Helper to send HTTP POST request with bounded retries and exponential backoff."""
+        import httpx
+
+        url = f"{self.cloud_url}{endpoint}"
+        headers = self._get_headers()
+
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                with httpx.Client(timeout=self.timeout) as client:
+                    response = client.post(url, json=data, headers=headers)
+
+                if response.status_code in (200, 201):
+                    return True
+                
+                if response.status_code in (401, 403):
+                    # Authentication / authorization failures fail fast, do not retry forever
+                    logger.error(
+                        f"Authentication failed ({response.status_code}) posting to SkyOps Cloud at {url}. "
+                        "Please verify SKYOPS_AGENT_TOKEN."
+                    )
+                    return False
+
+                if response.status_code in (400, 422):
+                    # Validation / client error, fail fast
+                    logger.error(
+                        self._redact(f"Client error ({response.status_code}) posting to SkyOps Cloud: {response.text}")
+                    )
+                    return False
+
+                # Transient server / rate limit errors (500, 502, 503, 504, 429) -> retry
+                logger.warning(
+                    self._redact(
+                        f"Attempt {attempt}/{self.max_retries}: Transient HTTP {response.status_code} "
+                        f"from SkyOps Cloud at {url}. Retrying..."
+                    )
+                )
+
+            except Exception as e:
+                err_str = self._redact(str(e))
+                logger.warning(
+                    f"Attempt {attempt}/{self.max_retries}: Connection error to SkyOps Cloud at {url}: {err_str}"
+                )
+
+            if attempt < self.max_retries:
+                sleep_time = self.backoff_factor * (2 ** (attempt - 1))
+                time.sleep(sleep_time)
+
+        return False
+

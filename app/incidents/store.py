@@ -96,13 +96,14 @@ class IncidentStore:
                     for item in incidents_data:
                         if item.get("status") == "OPEN":
                             res = item.get("resource", {})
-                            same_res = (
+                            same_ns_kind = (
                                 res.get("namespace") == incident.resource.namespace
                                 and res.get("kind") == incident.resource.kind
-                                and res.get("uid") == incident.resource.uid
                             )
+                            same_uid = same_ns_kind and incident.resource.uid and res.get("uid") == incident.resource.uid
+                            same_name = same_ns_kind and incident.resource.name and res.get("name") == incident.resource.name
                             same_key = item.get("identity_key") == incident.identity_key
-                            if same_res or same_key:
+                            if same_uid or same_key or same_name:
                                 logger.warning(
                                     f"Prevented duplicate active incident creation for {incident.resource.namespace}/{incident.resource.name} "
                                     f"(existing={item.get('incident_id')}, duplicate_rejected={incident.incident_id})"
@@ -133,10 +134,10 @@ class IncidentStore:
         return None
 
     def find_open_for_resource(
-        self, namespace: str, kind: str, uid: str, identity_key: Optional[str] = None
+        self, namespace: str, kind: str, uid: str, identity_key: Optional[str] = None, name: Optional[str] = None
     ) -> Optional[Incident]:
         """
-        Looks for an active (OPEN) incident matching the resource UID or deduplication identity key.
+        Looks for an active (OPEN) incident matching the resource UID, resource name, or deduplication identity key.
         Guarantees at most one active incident per Kubernetes resource instance.
         """
         with self.lock:
@@ -144,13 +145,14 @@ class IncidentStore:
             for item in incidents_data:
                 if item.get("status") == "OPEN":
                     res = item.get("resource", {})
-                    same_uid = (
+                    same_ns_kind = (
                         res.get("namespace") == namespace
                         and res.get("kind") == kind
-                        and res.get("uid") == uid
                     )
+                    same_uid = same_ns_kind and uid and res.get("uid") == uid
+                    same_name = same_ns_kind and name and res.get("name") == name
                     same_key = identity_key and item.get("identity_key") == identity_key
-                    if same_uid or same_key:
+                    if same_uid or same_key or same_name:
                         return Incident.from_dict(item)
         return None
 

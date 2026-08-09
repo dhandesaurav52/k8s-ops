@@ -62,6 +62,36 @@ def get_pod_unhealthy_state(pod: Any) -> Tuple[bool, str, str]:
     return False, "", f"Pod is {phase}"
 
 
+def is_pod_confirmed_healthy(pod: Any) -> bool:
+    """
+    Checks whether a Pod is confirmed fully healthy and recovered.
+    Requires phase == 'Running' AND container statuses present AND all containers Ready.
+    """
+    if not pod or not hasattr(pod, "status") or not pod.status:
+        return False
+
+    phase = getattr(pod.status, "phase", "") or ""
+    if phase != "Running":
+        return False
+
+    container_statuses = getattr(pod.status, "container_statuses", None) or []
+    if not container_statuses:
+        return False
+
+    for cs in container_statuses:
+        ready = getattr(cs, "ready", False)
+        state = getattr(cs, "state", None)
+        if not ready:
+            return False
+        if state:
+            waiting = getattr(state, "waiting", None)
+            terminated = getattr(state, "terminated", None)
+            if waiting or (terminated and getattr(terminated, "exit_code", 0) != 0):
+                return False
+
+    return True
+
+
 def collect_pod_events(v1: Optional[client.CoreV1Api], namespace: str, pod_name: str, pod_uid: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Collects Kubernetes events related to the specific Pod.

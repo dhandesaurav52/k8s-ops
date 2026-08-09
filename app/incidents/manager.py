@@ -1,16 +1,18 @@
 import logging
+import os
 import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from kubernetes import client
 
 from app.ai.analyzer import AIAnalyzer
+from app.ai.sanitizer import EvidenceSanitizer
 from app.diagnosis.engine import DiagnosisEngine
 from app.incidents.models import Incident, ResourceRef, utc_now_iso
 from app.incidents.store import IncidentStore
 from app.investigation.engine import InvestigationEngine
 from app.investigation.models import InvestigationResult
-from app.kubernetes.collector import collect_pod_events, get_pod_unhealthy_state
+from app.kubernetes.collector import collect_pod_events, get_pod_unhealthy_state, is_pod_confirmed_healthy
 
 logger = logging.getLogger("SkyOps.IncidentManager")
 
@@ -18,7 +20,8 @@ logger = logging.getLogger("SkyOps.IncidentManager")
 def compute_pod_canonical_state(pod: Any, primary_reason: str, current_state: str) -> str:
     """
     Computes a deterministic canonical state string for a Pod's current incident state.
-    Ignores volatile metadata like resourceVersion, event timestamps, watch timestamps.
+    Ignores volatile metadata like resourceVersion, event timestamps, watch timestamps,
+    and dynamic container waiting messages (e.g., exponential backoff timers).
     """
     if not pod or not hasattr(pod, "metadata") or not pod.metadata:
         return f"reason={primary_reason}|state={current_state}"
@@ -38,12 +41,10 @@ def compute_pod_canonical_state(pod: Any, primary_reason: str, current_state: st
                 terminated = getattr(state, "terminated", None)
                 if waiting and getattr(waiting, "reason", None):
                     reason = getattr(waiting, "reason", "")
-                    msg = getattr(waiting, "message", "") or ""
-                    container_details.append(f"{c_name}:waiting:{reason}:{msg}")
+                    container_details.append(f"{c_name}:waiting:{reason}")
                 elif terminated and (getattr(terminated, "reason", None) or getattr(terminated, "exit_code", None) is not None):
                     reason = getattr(terminated, "reason", "") or f"ExitCode{getattr(terminated, 'exit_code', '')}"
-                    msg = getattr(terminated, "message", "") or ""
-                    container_details.append(f"{c_name}:terminated:{reason}:{msg}")
+                    container_details.append(f"{c_name}:terminated:{reason}")
 
     c_str = "|".join(sorted(container_details)) if container_details else current_state
     return f"uid={uid}|phase={phase}|reason={primary_reason}|containers={c_str}"
@@ -53,7 +54,7 @@ class IncidentManager:
     """
     Core Incident Lifecycle Engine.
     Coordinates health checks, deduplication, state transitions, diagnosis,
-    deep investigation, AI reasoning, and storage persistence.
+    deep investigation, AI reasoning, storage persistence, and cloud outbox sync.
     """
 
     def __init__(
@@ -64,6 +65,8 @@ class IncidentManager:
         storage_v1_api: Optional[client.StorageV1Api] = None,
         investigation_engine: Optional[InvestigationEngine] = None,
         ai_analyzer: Optional[AIAnalyzer] = None,
+        outbox: Optional[Any] = None,
+        cluster_id: Optional[str] = None,
     ):
         self.store = store
         self.k8s_client = k8s_client
@@ -75,7 +78,43 @@ class IncidentManager:
             storage_v1_api=storage_v1_api,
         )
         self.ai_analyzer = ai_analyzer or AIAnalyzer()
+        self.outbox = outbox
+        self.cluster_id = cluster_id or os.getenv("SKYOPS_CLUSTER_ID", "skyops-cluster-default")
         self._lock = threading.Lock()
+
+    def _notify_outbox(self, incident: Incident) -> None:
+        """Enqueue sanitized incident payload into Outbox for async Cloud sync."""
+        if not self.outbox:
+            return
+        try:
+            severity = "MEDIUM"
+            if isinstance(incident.diagnosis, dict):
+                severity = incident.diagnosis.get("severity", "MEDIUM")
+
+            payload = {
+                "cluster_id": self.cluster_id,
+                "incident_id": incident.incident_id,
+                "resource_kind": incident.resource.kind,
+                "resource_namespace": incident.resource.namespace,
+                "resource_name": incident.resource.name,
+                "resource_uid": incident.resource.uid,
+                "category": incident.category,
+                "status": incident.status,
+                "current_state": incident.current_state,
+                "severity": severity,
+                "occurrences": incident.occurrences,
+                "first_seen": incident.created_at,
+                "last_seen": incident.last_seen,
+                "resolved_at": incident.resolved_at,
+                "diagnosis": incident.diagnosis,
+                "investigation": incident.investigation,
+                "ai_analysis": incident.ai_analysis,
+                "state_history": incident.state_history,
+            }
+            sanitized = EvidenceSanitizer._sanitize_recursive(payload)
+            self.outbox.enqueue(sanitized)
+        except Exception as e:
+            logger.error(f"Failed to enqueue incident '{incident.incident_id}' to outbox: {e}")
 
     def process_pod_event(self, event_type: str, pod: Any) -> Optional[Incident]:
         """
@@ -99,7 +138,7 @@ class IncidentManager:
 
             # Check if there is an existing OPEN incident for this resource instance or identity key
             existing_incident = self.store.find_open_for_resource(
-                namespace, "Pod", uid, identity_key=identity_key
+                namespace, "Pod", uid, identity_key=identity_key, name=name
             )
 
             # -------------------------------------------------------------
@@ -150,6 +189,7 @@ class IncidentManager:
                         self.ai_analyzer.analyze_incident(existing_incident)
 
                     self.store.save(existing_incident)
+                    self._notify_outbox(existing_incident)
                     self.log_terminal_update(existing_incident, "UPDATED")
                     return existing_incident
                 else:
@@ -185,6 +225,7 @@ class IncidentManager:
                         self.ai_analyzer.analyze_incident(new_incident)
 
                     self.store.save(new_incident)
+                    self._notify_outbox(new_incident)
                     self.log_terminal_update(new_incident, "DETECTED")
                     return new_incident
 
@@ -192,6 +233,11 @@ class IncidentManager:
             # SCENARIO B: Workload has RECOVERED (Running + Ready)
             # -------------------------------------------------------------
             else:
+                if not is_pod_confirmed_healthy(pod):
+                    # Pod is in transient or unconfirmed state (e.g. ContainerCreating or Running but not Ready)
+                    # Do NOT resolve open incidents prematurely
+                    return existing_incident
+
                 # Look for ANY open incident for this resource UID/namespace/name
                 open_incidents = [
                     inc for inc in self.store.list_all()
@@ -211,9 +257,11 @@ class IncidentManager:
                         open_inc.state_history.append("Running")
 
                     self.store.save(open_inc)
+                    self._notify_outbox(open_inc)
                     self.log_terminal_update(open_inc, "RESOLVED")
 
                 return None
+
 
     def log_terminal_update(self, incident: Incident, action: str) -> None:
         """

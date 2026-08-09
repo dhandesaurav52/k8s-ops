@@ -1,1 +1,10 @@
-{}
+{
+  "tests/test_live_gemini.py::test_live_gemini_integration": true,
+  "tests/test_phase6_sync.py::TestClient": true,
+  "tests/test_phase6_sync.py::TestCloudConnector": true,
+  "tests/test_phase6_sync.py::TestOutboxQueue": true,
+  "tests/test_phase6_sync.py::TestCloudApiMultiClusterAndIdempotency": true,
+  "tests/test_phase6_sync.py::TestKubernetesIndependenceOnCloudFailure": true,
+  "tests/test_real_cluster.py::test_python_k8s_client_real_models_compatibility": true,
+  "tests/test_real_cluster.py::test_real_cluster_connectivity_check": true
+}

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 import argparse
 import logging
+import os
 import sys
 import time
 
 from app.agent.cluster import collect_cluster_info, get_or_create_cluster_id
-from app.agent.connector import LocalDevelopmentConnector
+from app.agent.connector import CloudConnector, LocalDevelopmentConnector
 from app.agent.health import HealthServer
+from app.agent.outbox import CloudSyncWorker, OutboxQueue
 from app.ai.analyzer import AIAnalyzer
 from app.config import (
     AGENT_NAMESPACE,
@@ -63,9 +65,25 @@ def run_agent(kubeconfig_path: str = None, port: int = AGENT_PORT, standalone: b
         cluster_id=cluster_id,
     )
 
-    # 4. Connector Stub & Engines
-    connector = LocalDevelopmentConnector()
-    connector.register(cluster_info)
+    # 4. Connector Setup & Cloud Outbox
+    cloud_url = os.getenv("SKYOPS_CLOUD_URL", "").strip()
+    agent_token = os.getenv("SKYOPS_AGENT_TOKEN", "").strip()
+
+    if cloud_url:
+        logger.info(f"Connecting Agent to SkyOps Cloud at: {cloud_url}")
+        connector = CloudConnector(cloud_url=cloud_url, agent_token=agent_token)
+        cloud_mode_str = "cloud"
+    else:
+        logger.info("SKYOPS_CLOUD_URL not set. Running in Local Development / Stub mode.")
+        connector = LocalDevelopmentConnector()
+        cloud_mode_str = "stub"
+
+    cloud_registered = connector.register(cluster_info)
+    health_server.set_cloud_status(connected=cloud_registered, mode=cloud_mode_str)
+
+    outbox = OutboxQueue()
+    sync_worker = CloudSyncWorker(outbox=outbox, connector=connector)
+    sync_worker.start()
 
     store = IncidentStore(INCIDENTS_FILE)
     ai_analyzer = AIAnalyzer()
@@ -73,6 +91,7 @@ def run_agent(kubeconfig_path: str = None, port: int = AGENT_PORT, standalone: b
 
     # 5. Output Agent Startup Banner
     k8s_conn_str = "OK" if k8s_connected else "FAILED / DISCONNECTED"
+    cloud_conn_str = f"CONNECTED ({cloud_url})" if (cloud_url and cloud_registered) else ("LOCAL STUB" if not cloud_url else "DISCONNECTED / RETRYING")
     k8s_version = cluster_info.get("kubernetes_version", "unknown")
     nodes_count = cluster_info.get("nodes", "0")
     ns_count = cluster_info.get("namespaces", "0")
@@ -83,6 +102,7 @@ def run_agent(kubeconfig_path: str = None, port: int = AGENT_PORT, standalone: b
     print("=" * 60 + "\n")
     print("Starting SkyOps Kubernetes Agent...\n")
     print(f"Kubernetes connection: {k8s_conn_str}")
+    print(f"SkyOps Cloud connection: {cloud_conn_str}")
     print(f"Cluster ID: {cluster_id}")
     print(f"Kubernetes version: {k8s_version}")
     print(f"Nodes: {nodes_count}")
@@ -110,13 +130,15 @@ def run_agent(kubeconfig_path: str = None, port: int = AGENT_PORT, standalone: b
         apps_v1_api=apps_v1,
         storage_v1_api=storage_v1,
         ai_analyzer=ai_analyzer,
+        outbox=outbox,
+        cluster_id=cluster_id,
     )
 
     watcher = KubernetesWatcher(v1=v1, manager=manager, namespace=WATCH_NAMESPACE)
     
     if standalone:
         # For programmatic execution in background thread / tests
-        return health_server, watcher
+        return health_server, watcher, sync_worker
 
     # Block and watch
     watcher.start()
