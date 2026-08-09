@@ -58,11 +58,11 @@ export default function App() {
         if (refreshed) setSelectedIncident(refreshed);
       }
     } catch (e: any) {
-      console.warn('SkyOps Cloud API error:', e);
+      console.warn('SkyOps Server API error:', e);
       // Only show top error banner if no cluster data is present or if user manually refreshed
       if (!silent || clusters.length === 0) {
         setIsApiUnavailable(true);
-        setApiErrorMessage(e?.message || 'Could not establish connection to SkyOps Cloud Backend');
+        setApiErrorMessage(e?.message || 'Could not establish connection to SkyOps Server');
       }
     } finally {
       if (!silent) setIsRefreshing(false);

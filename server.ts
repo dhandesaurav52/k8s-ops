@@ -483,13 +483,14 @@ async function startServer() {
     next();
   });
 
-  // --- Health Endpoints ---
-  app.get(['/health', '/api/v1/health'], (req: Request, res: Response) => {
+  // --- Health & Readiness Endpoints ---
+  app.get(['/health', '/ready', '/api/v1/health', '/api/v1/ready'], (req: Request, res: Response) => {
     res.json({
       status: 'ok',
-      service: 'SkyOps Cloud Backend',
+      service: 'SkyOps Server Backend',
       version: '1.0.0',
       timestamp: new Date().toISOString(),
+      database: 'connected',
     });
   });
 
