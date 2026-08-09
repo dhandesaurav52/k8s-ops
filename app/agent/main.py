@@ -66,15 +66,15 @@ def run_agent(kubeconfig_path: str = None, port: int = AGENT_PORT, standalone: b
     )
 
     # 4. Connector Setup & Cloud Outbox
-    cloud_url = os.getenv("SKYOPS_CLOUD_URL", "").strip()
+    server_url = os.getenv("SKYOPS_SERVER_URL", "").strip() or os.getenv("SKYOPS_CLOUD_URL", "").strip()
     agent_token = os.getenv("SKYOPS_AGENT_TOKEN", "").strip()
 
-    if cloud_url:
-        logger.info(f"Connecting Agent to SkyOps Cloud at: {cloud_url}")
-        connector = CloudConnector(cloud_url=cloud_url, agent_token=agent_token)
-        cloud_mode_str = "cloud"
+    if server_url:
+        logger.info(f"Connecting Agent to SkyOps Server at: {server_url}")
+        connector = CloudConnector(cloud_url=server_url, agent_token=agent_token)
+        cloud_mode_str = "production"
     else:
-        logger.info("SKYOPS_CLOUD_URL not set. Running in Local Development / Stub mode.")
+        logger.info("SKYOPS_SERVER_URL / SKYOPS_CLOUD_URL not set. Running in Local Development / Stub mode.")
         connector = LocalDevelopmentConnector()
         cloud_mode_str = "stub"
 
@@ -91,7 +91,7 @@ def run_agent(kubeconfig_path: str = None, port: int = AGENT_PORT, standalone: b
 
     # 5. Output Agent Startup Banner
     k8s_conn_str = "OK" if k8s_connected else "FAILED / DISCONNECTED"
-    cloud_conn_str = f"CONNECTED ({cloud_url})" if (cloud_url and cloud_registered) else ("LOCAL STUB" if not cloud_url else "DISCONNECTED / RETRYING")
+    cloud_conn_str = f"CONNECTED ({server_url})" if (server_url and cloud_registered) else ("LOCAL STUB" if not server_url else "DISCONNECTED / RETRYING")
     k8s_version = cluster_info.get("kubernetes_version", "unknown")
     nodes_count = cluster_info.get("nodes", "0")
     ns_count = cluster_info.get("namespaces", "0")

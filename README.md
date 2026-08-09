@@ -105,7 +105,20 @@ npm run build
 
 ---
 
-## 5. Security & Privacy
+## 5. Agent ↔ Server Communication
+
+- **Server URL Configuration**: The Agent connects to the SkyOps Server using `SKYOPS_SERVER_URL` (e.g. `http://skyops-server.skyops.svc.cluster.local:8000`). If not set, it falls back to `SKYOPS_CLOUD_URL` for backward compatibility or enters Local Stub mode if neither is configured.
+- **Authentication**: All API requests from the Agent include `Authorization: Bearer <SKYOPS_AGENT_TOKEN>`. The token is read from environment secrets, redacted from logs and error messages, and verified on the server.
+- **Incident Delivery & Contract**: Incidents captured by the Agent are serialized to JSON adhering strictly to the server's canonical schema. The field `state_history` supports both legacy string list representations and detailed state dictionaries.
+- **Idempotent Upsert**: Incident submission (`POST /api/v1/incidents`) uses canonical incident IDs (`cluster_id` + resource identity) to prevent duplicate record creation during retries or Agent restarts.
+- **Outbox & Retry Mechanics**: The Agent writes incidents to a thread-safe disk/memory Outbox queue. 
+  - **Fatal Errors (401/403 Auth, 400/422 Validation)**: Fail fast to prevent infinite retry loops on non-recoverable client/credential errors.
+  - **Transient Errors (5xx, 429, Connection Refused, Timeout)**: Retried with exponential backoff while retaining the item in the Outbox until successful delivery.
+- **Health & Readiness Status**: The Agent exposes a health probe (`/health` and `/ready` on port 8080) reporting Kubernetes connectivity, SkyOps Server connection status, operational mode (`production` or `stub`), `cluster_id`, last successful synchronization timestamp, and pending Outbox item count.
+
+---
+
+## 6. Security & Privacy
 
 - **Zero SaaS Dependency**: No customer data or telemetry leaves your infrastructure.
 - **RBAC Security**: Agent operates under least-privilege RBAC rules.

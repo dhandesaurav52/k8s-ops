@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
@@ -30,7 +30,7 @@ class IncidentCreate(BaseModel):
     diagnosis: Optional[Dict[str, Any]] = Field(default_factory=dict)
     investigation: Optional[Dict[str, Any]] = Field(default_factory=dict)
     ai_analysis: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    state_history: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    state_history: Optional[List[Union[str, Dict[str, Any]]]] = Field(default_factory=list)
 
     @field_validator("severity")
     @classmethod
@@ -66,7 +66,7 @@ class IncidentUpdate(BaseModel):
     diagnosis: Optional[Dict[str, Any]] = None
     investigation: Optional[Dict[str, Any]] = None
     ai_analysis: Optional[Dict[str, Any]] = None
-    state_history: Optional[List[Dict[str, Any]]] = None
+    state_history: Optional[List[Union[str, Dict[str, Any]]]] = None
 
     @field_validator("severity")
     @classmethod
@@ -99,9 +99,10 @@ class IncidentResponse(BaseModel):
     diagnosis: Dict[str, Any]
     investigation: Dict[str, Any]
     ai_analysis: Dict[str, Any]
-    state_history: List[Dict[str, Any]]
+    state_history: List[Union[str, Dict[str, Any]]] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
     resolved_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+

@@ -112,7 +112,7 @@ class OutboxQueue:
             self._write_items(updated)
         logger.debug(f"Outbox item {item_id} marked COMPLETED.")
 
-    def mark_failed(self, item_id: str, error: str, max_retries: int = 10):
+    def mark_failed(self, item_id: str, error: str, fatal: bool = False, max_retries: int = 10):
         """Mark an outbox item as failed with exponential backoff for retries."""
         now = time.time()
         with self.lock:
@@ -123,9 +123,11 @@ class OutboxQueue:
                     item["attempts"] = attempts
                     item["last_error"] = str(error)
 
-                    if attempts >= max_retries:
+                    if fatal or attempts >= max_retries:
                         item["status"] = "FAILED"
-                        logger.error(f"Outbox item {item_id} reached max retries ({max_retries}). Marked FAILED.")
+                        logger.error(
+                            f"Outbox item {item_id} marked FAILED (fatal={fatal}, attempts={attempts})."
+                        )
                     else:
                         backoff = min(300.0, 2.0 ** attempts)  # Max 5 min backoff
                         item["next_retry_at"] = now + backoff
@@ -172,11 +174,16 @@ class CloudSyncWorker(Thread):
                     item_id = item["id"]
                     payload = item.get("payload", {})
 
-                    success = self.connector.send_incident(payload)
+                    if hasattr(self.connector, "send_incident_status"):
+                        success, fatal = self.connector.send_incident_status(payload)
+                    else:
+                        success = self.connector.send_incident(payload)
+                        fatal = False
+
                     if success:
                         self.outbox.mark_completed(item_id)
                     else:
-                        self.outbox.mark_failed(item_id, error="Cloud connector delivery failed")
+                        self.outbox.mark_failed(item_id, error="Cloud connector delivery failed", fatal=fatal)
 
             except Exception as e:
                 logger.error(f"Unhandled error in CloudSyncWorker loop: {e}", exc_info=True)

@@ -102,7 +102,7 @@ class CloudConnector(ClusterConnector):
             "namespace_count": int(cluster_info.get("namespaces", cluster_info.get("namespace_count", 0))),
         }
 
-        success = self._post("/api/v1/clusters", payload)
+        success, _ = self._post("/api/v1/clusters", payload)
         if success:
             self.registered = True
             logger.info(f"Successfully registered cluster '{payload['cluster_id']}' with SkyOps Cloud.")
@@ -112,20 +112,38 @@ class CloudConnector(ClusterConnector):
 
     def send_incident(self, incident: Any) -> bool:
         """Send or update an incident on SkyOps Cloud."""
+        success, _ = self.send_incident_status(incident)
+        return success
+
+    def send_incident_status(self, incident: Any) -> tuple[bool, bool]:
+        """
+        Send or update an incident on SkyOps Cloud.
+        Returns a tuple: (success: bool, is_fatal: bool).
+        """
         if isinstance(incident, dict):
             payload = incident
         else:
+            resource = getattr(incident, "resource", None)
+            res_kind = getattr(resource, "kind", "Pod") if resource else "Pod"
+            res_namespace = getattr(resource, "namespace", "default") if resource else "default"
+            res_name = getattr(resource, "name", "unknown") if resource else "unknown"
+            res_uid = getattr(resource, "uid", "") if resource else ""
+
+            severity = "MEDIUM"
+            if hasattr(incident, "diagnosis") and isinstance(incident.diagnosis, dict):
+                severity = incident.diagnosis.get("severity", "MEDIUM")
+
             payload = {
                 "cluster_id": getattr(incident, "cluster_id", os.getenv("SKYOPS_CLUSTER_ID", "unknown")),
                 "incident_id": getattr(incident, "incident_id", "INC-UNKNOWN"),
-                "resource_kind": getattr(getattr(incident, "resource", None), "kind", "Pod"),
-                "resource_namespace": getattr(getattr(incident, "resource", None), "namespace", "default"),
-                "resource_name": getattr(getattr(incident, "resource", None), "name", "unknown"),
-                "resource_uid": getattr(getattr(incident, "resource", None), "uid", ""),
+                "resource_kind": res_kind,
+                "resource_namespace": res_namespace,
+                "resource_name": res_name,
+                "resource_uid": res_uid,
                 "category": getattr(incident, "category", "Unknown"),
                 "status": getattr(incident, "status", "OPEN"),
                 "current_state": getattr(incident, "current_state", ""),
-                "severity": getattr(incident, "severity", "MEDIUM"),
+                "severity": getattr(incident, "severity", severity),
                 "occurrences": getattr(incident, "occurrences", 1),
                 "diagnosis": getattr(incident, "diagnosis", {}) or {},
                 "investigation": getattr(incident, "investigation", {}) or {},
@@ -134,15 +152,18 @@ class CloudConnector(ClusterConnector):
             }
 
         inc_id = payload.get("incident_id", "INC-UNKNOWN")
-        success = self._post("/api/v1/incidents", payload)
+        success, is_fatal = self._post("/api/v1/incidents", payload)
         if success:
             logger.info(f"Successfully synchronized incident '{inc_id}' to SkyOps Cloud.")
         else:
-            logger.warning(f"Failed to synchronize incident '{inc_id}' to SkyOps Cloud.")
-        return success
+            logger.warning(f"Failed to synchronize incident '{inc_id}' to SkyOps Cloud (fatal={is_fatal}).")
+        return success, is_fatal
 
-    def _post(self, endpoint: str, data: Dict[str, Any]) -> bool:
-        """Helper to send HTTP POST request with bounded retries and exponential backoff."""
+    def _post(self, endpoint: str, data: Dict[str, Any]) -> tuple[bool, bool]:
+        """
+        Helper to send HTTP POST request with bounded retries and exponential backoff.
+        Returns a tuple: (success: bool, is_fatal: bool).
+        """
         import httpx
 
         url = f"{self.cloud_url}{endpoint}"
@@ -154,7 +175,7 @@ class CloudConnector(ClusterConnector):
                     response = client.post(url, json=data, headers=headers)
 
                 if response.status_code in (200, 201):
-                    return True
+                    return True, False
                 
                 if response.status_code in (401, 403):
                     # Authentication / authorization failures fail fast, do not retry forever
@@ -162,14 +183,14 @@ class CloudConnector(ClusterConnector):
                         f"Authentication failed ({response.status_code}) posting to SkyOps Cloud at {url}. "
                         "Please verify SKYOPS_AGENT_TOKEN."
                     )
-                    return False
+                    return False, True
 
                 if response.status_code in (400, 422):
                     # Validation / client error, fail fast
                     logger.error(
                         self._redact(f"Client error ({response.status_code}) posting to SkyOps Cloud: {response.text}")
                     )
-                    return False
+                    return False, True
 
                 # Transient server / rate limit errors (500, 502, 503, 504, 429) -> retry
                 logger.warning(
@@ -189,5 +210,5 @@ class CloudConnector(ClusterConnector):
                 sleep_time = self.backoff_factor * (2 ** (attempt - 1))
                 time.sleep(sleep_time)
 
-        return False
+        return False, False
 

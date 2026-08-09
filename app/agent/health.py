@@ -17,6 +17,8 @@ class AgentHealthRequestHandler(BaseHTTPRequestHandler):
     cloud_connected: bool = False
     cloud_mode: str = "stub"
     cluster_id: str = "unknown"
+    last_sync_at: Optional[str] = None
+    outbox_pending_count: int = 0
 
     def log_message(self, format, *args):
         # Suppress noise in stdout for health checks unless in debug
@@ -27,7 +29,15 @@ class AgentHealthRequestHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            response = {"status": "healthy"}
+            response = {
+                "status": "healthy",
+                "kubernetes": "connected" if AgentHealthRequestHandler.k8s_connected else "disconnected",
+                "skyops_server": "connected" if AgentHealthRequestHandler.cloud_connected else "disconnected",
+                "mode": AgentHealthRequestHandler.cloud_mode,
+                "cluster_id": AgentHealthRequestHandler.cluster_id,
+                "last_sync": AgentHealthRequestHandler.last_sync_at,
+                "outbox_pending": AgentHealthRequestHandler.outbox_pending_count,
+            }
             self.wfile.write(json.dumps(response).encode("utf-8"))
 
         elif self.path == "/ready":
@@ -40,9 +50,11 @@ class AgentHealthRequestHandler(BaseHTTPRequestHandler):
                 response = {
                     "status": "ready",
                     "kubernetes": "connected",
-                    "cloud": "connected" if AgentHealthRequestHandler.cloud_connected else "disconnected",
-                    "cloud_mode": AgentHealthRequestHandler.cloud_mode,
+                    "skyops_server": "connected" if AgentHealthRequestHandler.cloud_connected else "disconnected",
+                    "mode": AgentHealthRequestHandler.cloud_mode,
                     "cluster_id": AgentHealthRequestHandler.cluster_id,
+                    "last_sync": AgentHealthRequestHandler.last_sync_at,
+                    "outbox_pending": AgentHealthRequestHandler.outbox_pending_count,
                 }
             else:
                 self.send_response(503)
@@ -80,6 +92,11 @@ class HealthServer:
     def set_cloud_status(self, connected: bool, mode: str = "cloud"):
         AgentHealthRequestHandler.cloud_connected = connected
         AgentHealthRequestHandler.cloud_mode = mode
+
+    def set_sync_status(self, last_sync: Optional[str] = None, outbox_pending: int = 0):
+        if last_sync is not None:
+            AgentHealthRequestHandler.last_sync_at = last_sync
+        AgentHealthRequestHandler.outbox_pending_count = outbox_pending
 
     def start(self):
         try:
