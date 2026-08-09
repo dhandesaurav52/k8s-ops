@@ -44,6 +44,14 @@ spec:
                   fieldPath: metadata.namespace
             - name: SKYOPS_AGENT_PORT
               value: "8080"
+            - name: SKYOPS_SERVER_URL
+              value: "http://skyops-server.skyops.svc.cluster.local:8000"
+            - name: SKYOPS_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: skyops-secrets
+                  key: SKYOPS_AGENT_TOKEN
+                  optional: true
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef:
