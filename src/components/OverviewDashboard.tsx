@@ -18,6 +18,7 @@ import { SeverityBadge, StatusBadge } from './IncidentStatusBadge';
 interface OverviewDashboardProps {
   clusters: ClusterInfo[];
   incidents: Incident[];
+  selectedClusterId: string;
   onSelectIncident: (incident: Incident) => void;
   onNavigateTab: (tab: NavTabType) => void;
   onSelectCluster: (clusterId: string) => void;
@@ -26,31 +27,40 @@ interface OverviewDashboardProps {
 export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   clusters,
   incidents,
+  selectedClusterId,
   onSelectIncident,
   onNavigateTab,
   onSelectCluster,
 }) => {
-  // Calculated live metrics
-  const totalClusters = clusters.length;
-  const connectedClusters = clusters.filter((c) => c.status === 'CONNECTED' || c.status === 'STUB').length;
-  const degradedClusters = clusters.filter((c) => c.status === 'DEGRADED').length;
-  const offlineClusters = clusters.filter((c) => c.status === 'DISCONNECTED').length;
+  // Filter data according to global selectedClusterId scope
+  const isGlobalAll = !selectedClusterId || selectedClusterId === 'ALL';
+  const scopedClusters = isGlobalAll
+    ? clusters
+    : clusters.filter((c) => c.cluster_id === selectedClusterId);
+  const scopedIncidents = isGlobalAll
+    ? incidents
+    : incidents.filter((i) => i.cluster_id === selectedClusterId);
 
-  const openIncidents = incidents.filter((i) => i.status === 'OPEN');
+  // Calculated live metrics for current scope
+  const totalClusters = scopedClusters.length;
+  const connectedClusters = scopedClusters.filter((c) => c.status === 'CONNECTED' || c.status === 'STUB').length;
+  const degradedClusters = scopedClusters.filter((c) => c.status === 'DEGRADED').length;
+  const offlineClusters = scopedClusters.filter((c) => c.status === 'DISCONNECTED').length;
+
+  const openIncidents = scopedIncidents.filter((i) => i.status === 'OPEN');
   const criticalIncidents = openIncidents.filter((i) => i.severity === 'CRITICAL');
   const highIncidents = openIncidents.filter((i) => i.severity === 'HIGH');
   const mediumIncidents = openIncidents.filter((i) => i.severity === 'MEDIUM');
   const lowIncidents = openIncidents.filter((i) => i.severity === 'LOW');
-  const resolvedIncidents = incidents.filter((i) => i.status === 'RESOLVED');
+  const resolvedIncidents = scopedIncidents.filter((i) => i.status === 'RESOLVED');
 
-  const totalNodes = clusters.reduce((acc, c) => acc + (c.node_count || 0), 0);
-  const totalPods = clusters.reduce((acc, c) => acc + (c.pod_count || 0), 0);
-  const totalNamespaces = clusters.reduce((acc, c) => acc + (c.namespace_count || 0), 0);
+  const totalNodes = scopedClusters.reduce((acc, c) => acc + (c.node_count || 0), 0);
+  const totalPods = scopedClusters.reduce((acc, c) => acc + (c.pod_count || 0), 0);
+  const totalNamespaces = scopedClusters.reduce((acc, c) => acc + (c.namespace_count || 0), 0);
 
-  const healthyAgents = clusters.filter((c) => c.agent_status === 'HEALTHY' || c.agent_status === 'LOCAL_DEV').length;
-  const disconnectedAgents = clusters.length - healthyAgents;
+  const healthyAgents = scopedClusters.filter((c) => c.agent_status === 'HEALTHY' || c.agent_status === 'LOCAL_DEV').length;
 
-  const recentIncidents = [...incidents]
+  const recentIncidents = [...scopedIncidents]
     .sort((a, b) => new Date(b.last_seen).getTime() - new Date(a.last_seen).getTime())
     .slice(0, 5);
 

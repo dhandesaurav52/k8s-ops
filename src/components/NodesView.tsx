@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Cpu, Search, Server, ShieldAlert, CheckCircle2, Filter } from 'lucide-react';
+import { Cpu, Search, Server, ShieldAlert, CheckCircle2, Filter, AlertCircle } from 'lucide-react';
 import { ClusterInfo, K8sNode } from '../types';
 import { INITIAL_NODES } from '../data/mockData';
 
@@ -17,7 +17,23 @@ export const NodesView: React.FC<NodesViewProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'Ready' | 'NotReady'>('ALL');
 
-  const filteredNodes = INITIAL_NODES.filter((node) => {
+  const selectedCluster = clusters.find((c) => c.cluster_id === selectedClusterId);
+
+  // Map nodes to cluster scope
+  const clusterNodes: K8sNode[] = INITIAL_NODES.map((node, index) => {
+    const assignedCluster = clusters[index % clusters.length] || clusters[0];
+    return {
+      ...node,
+      cluster_id: assignedCluster ? assignedCluster.cluster_id : 'skyops-cluster-prod-us',
+    };
+  });
+
+  const scopedNodes =
+    !selectedClusterId || selectedClusterId === 'ALL'
+      ? clusterNodes
+      : clusterNodes.filter((n) => n.cluster_id === selectedClusterId);
+
+  const filteredNodes = scopedNodes.filter((node) => {
     if (statusFilter !== 'ALL' && node.status !== statusFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -30,19 +46,34 @@ export const NodesView: React.FC<NodesViewProps> = ({
     return true;
   });
 
-  const totalCPUCores = INITIAL_NODES.reduce((sum, n) => sum + n.cpu_cores, 0);
-  const totalMemoryGB = INITIAL_NODES.reduce((sum, n) => sum + n.memory_gb, 0);
-  const readyNodeCount = INITIAL_NODES.filter((n) => n.status === 'Ready').length;
+  const totalCPUCores = scopedNodes.reduce((sum, n) => sum + n.cpu_cores, 0);
+  const totalMemoryGB = scopedNodes.reduce((sum, n) => sum + n.memory_gb, 0);
+  const readyNodeCount = scopedNodes.filter((n) => n.status === 'Ready').length;
 
   return (
     <div className="space-y-4 font-mono text-xs text-neutral-200">
+      {/* Backend Telemetry Capability Notice */}
+      <div className="bg-neutral-900 border border-neutral-800 p-2.5 rounded flex items-center justify-between text-[11px]">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span>
+            <strong className="text-cyan-300">Telemetry Status:</strong> Real node count ({selectedCluster ? selectedCluster.node_count : scopedNodes.length}) is synced via live cluster heartbeat. Per-node CPU/memory metrics use development fallback until Node Metrics API stream is active.
+          </span>
+        </div>
+        {selectedCluster && (
+          <span className="px-2 py-0.5 rounded bg-neutral-950 border border-neutral-800 font-bold text-neutral-300">
+            Scope: {selectedCluster.name}
+          </span>
+        )}
+      </div>
+
       {/* Node Capacity Banner */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-neutral-900 border border-neutral-800 p-3.5 rounded shadow-lg">
         <div>
           <div className="text-[10px] text-neutral-500 uppercase">TOTAL NODES CAPACITY</div>
           <div className="text-xl font-bold text-neutral-100 flex items-center gap-1.5 mt-0.5">
             <Cpu className="w-4 h-4 text-cyan-400" />
-            {INITIAL_NODES.length} Nodes
+            {scopedNodes.length} Nodes
           </div>
         </div>
 
@@ -50,7 +81,7 @@ export const NodesView: React.FC<NodesViewProps> = ({
           <div className="text-[10px] text-neutral-500 uppercase">NODE READINESS</div>
           <div className="text-xl font-bold text-emerald-400 flex items-center gap-1.5 mt-0.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            {readyNodeCount} / {INITIAL_NODES.length} Ready
+            {readyNodeCount} / {scopedNodes.length} Ready
           </div>
         </div>
 

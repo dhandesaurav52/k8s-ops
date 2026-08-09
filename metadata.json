@@ -1,6 +1,6 @@
 {
   "name": "SkyOps",
-  "description": "Kubernetes Incident Detection and Investigation Platform",
+  "description": "Kubernetes Incident Observability, Root Cause Analysis & Safe Automated Remediation Platform",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

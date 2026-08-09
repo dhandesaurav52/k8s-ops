@@ -1,9 +1,8 @@
-venv/
-.venv/
 node_modules/
+build/
 dist/
-.pytest_cache/
-__pycache__/
-*.py[cod]
-data/cluster_id.txt
-data/outbox.json
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example

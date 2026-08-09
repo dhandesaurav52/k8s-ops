@@ -116,6 +116,19 @@ class EvidenceSanitizer:
                 for sec in inv["secrets"] if isinstance(sec, dict)
             ]
 
+        # Phase 9 Signal Correlation Payload Additions
+        if inv.get("evidence_timeline"):
+            payload["evidence_timeline"] = cls._limit_list(inv["evidence_timeline"], 20)
+
+        if inv.get("root_cause_analysis"):
+            payload["root_cause_analysis"] = inv["root_cause_analysis"]
+
+        if inv.get("blast_radius"):
+            payload["blast_radius"] = inv["blast_radius"]
+
+        if inv.get("related_incidents"):
+            payload["related_incidents"] = cls._limit_list(inv["related_incidents"], 10)
+
         return payload
 
     @classmethod

@@ -1,6 +1,7 @@
-import React from 'react';
-import { X, CheckCircle2, Server, Terminal, Shield, RefreshCw, Activity, Layers } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, CheckCircle2, Server, Terminal, Shield, RefreshCw, Activity, Layers, Wifi, Clock } from 'lucide-react';
 import { ClusterInfo, Incident } from '../types';
+import { apiService } from '../services/api';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -19,6 +20,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   incidents,
   onRefresh,
 }) => {
+  const [healthStatus, setHealthStatus] = useState<'CONNECTED' | 'DEGRADED' | 'OFFLINE'>('CONNECTED');
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [lastChecked, setLastChecked] = useState<string | null>(null);
+  const [isProbing, setIsProbing] = useState<boolean>(false);
+
+  const runHealthProbe = async () => {
+    setIsProbing(true);
+    const res = await apiService.checkHealth();
+    setHealthStatus(res.status);
+    setLatencyMs(res.latencyMs);
+    setLastChecked(res.timestamp);
+    setIsProbing(false);
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      runHealthProbe();
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -45,32 +66,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-4 space-y-4 text-neutral-300">
-          {/* Cloud API Status Box */}
+          {/* Cloud API Real Probe Status Box */}
           <div className="p-3 bg-neutral-950 border border-neutral-800 rounded space-y-2">
             <div className="flex items-center justify-between text-[11px]">
-              <span className="text-neutral-400">CLOUD BACKEND API</span>
-              <span className="font-bold text-neutral-200">/api/v1</span>
+              <span className="text-neutral-400 font-bold flex items-center gap-1.5">
+                <Wifi className="w-3.5 h-3.5 text-cyan-400" />
+                REAL-TIME CLOUD API PROBE
+              </span>
+              <button
+                onClick={runHealthProbe}
+                disabled={isProbing}
+                className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <RefreshCw className={`w-3 h-3 ${isProbing ? 'animate-spin' : ''}`} />
+                PROBE NOW
+              </button>
             </div>
 
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-neutral-400">Connection State:</span>
+            <div className="flex items-center justify-between text-xs pt-1 border-t border-neutral-900">
+              <span className="text-neutral-400">API Status:</span>
               <div className="flex items-center gap-1.5">
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    isCloudConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                    healthStatus === 'CONNECTED'
+                      ? 'bg-emerald-500 animate-pulse'
+                      : healthStatus === 'DEGRADED'
+                      ? 'bg-amber-500'
+                      : 'bg-red-500'
                   }`}
                 />
                 <span
-                  className={`font-bold ${isCloudConnected ? 'text-emerald-400' : 'text-red-400'}`}
+                  className={`font-bold ${
+                    healthStatus === 'CONNECTED'
+                      ? 'text-emerald-400'
+                      : healthStatus === 'DEGRADED'
+                      ? 'text-amber-400'
+                      : 'text-red-400'
+                  }`}
                 >
-                  {isCloudConnected ? 'ONLINE & CONNECTED' : 'DISCONNECTED / RETRYING'}
+                  {healthStatus}
                 </span>
               </div>
             </div>
 
             <div className="flex items-center justify-between text-xs">
-              <span className="text-neutral-400">Response Probe:</span>
-              <span className="text-neutral-200">HTTP 200 OK (GET /api/v1/health)</span>
+              <span className="text-neutral-400">Latency:</span>
+              <span className="font-bold text-neutral-100">
+                {latencyMs !== null ? `${latencyMs} ms` : 'Measuring...'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-neutral-400">Last checked:</span>
+              <span className="text-neutral-400 font-mono text-[11px] flex items-center gap-1">
+                <Clock className="w-3 h-3 text-neutral-500" />
+                {lastChecked ? new Date(lastChecked).toLocaleTimeString() : 'Not probed'}
+              </span>
             </div>
           </div>
 

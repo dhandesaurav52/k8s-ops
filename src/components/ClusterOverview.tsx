@@ -10,19 +10,21 @@ import {
   Server,
   ShieldAlert,
 } from 'lucide-react';
-import { ClusterInfo, K8sNode } from '../types';
+import { ClusterInfo, K8sNode, NavTabType } from '../types';
 import { INITIAL_NODES } from '../data/mockData';
 
 interface ClusterOverviewProps {
   clusters: ClusterInfo[];
   selectedClusterId: string;
   onSelectCluster: (clusterId: string) => void;
+  onNavigateTab?: (tab: NavTabType) => void;
 }
 
 export const ClusterOverview: React.FC<ClusterOverviewProps> = ({
   clusters,
   selectedClusterId,
   onSelectCluster,
+  onNavigateTab,
 }) => {
   const currentCluster =
     clusters.find((c) => c.cluster_id === selectedClusterId) || clusters[0];
@@ -68,9 +70,19 @@ export const ClusterOverview: React.FC<ClusterOverviewProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-[10px] text-neutral-500">
+              <div className="flex items-center justify-between text-[10px] text-neutral-500 pt-1">
                 <span>Agent: {c.agent_status || 'HEALTHY'}</span>
-                <span>ID: {c.cluster_id.replace('skyops-cluster-', '')}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectCluster(c.cluster_id);
+                    if (onNavigateTab) onNavigateTab('incidents');
+                  }}
+                  className="px-2 py-0.5 bg-cyan-950 text-cyan-400 hover:bg-cyan-900 border border-cyan-800 rounded font-bold transition-colors cursor-pointer"
+                >
+                  VIEW INCIDENTS
+                </button>
               </div>
             </div>
           );

@@ -25,7 +25,7 @@ spec:
         fsGroup: 10001
       containers:
         - name: skyops-agent
-          image: dhandesaurav52/skyops-agent:0.1.0
+          image: skyops-agent:latest
           imagePullPolicy: IfNotPresent
           command: ["python", "-m", "app.agent.main"]
           securityContext:

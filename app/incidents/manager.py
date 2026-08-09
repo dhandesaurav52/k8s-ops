@@ -7,6 +7,7 @@ from kubernetes import client
 
 from app.ai.analyzer import AIAnalyzer
 from app.ai.sanitizer import EvidenceSanitizer
+from app.correlation.engine import CorrelationEngine
 from app.diagnosis.engine import DiagnosisEngine
 from app.incidents.models import Incident, ResourceRef, utc_now_iso
 from app.incidents.store import IncidentStore
@@ -184,6 +185,21 @@ class IncidentManager:
                         inv_res = self.investigation_engine.investigate(existing_incident, pod_obj=pod)
                         existing_incident.investigation = inv_res.to_dict()
 
+                    # Run Signal Correlation & Evidence-Based RCA
+                    corr_res = CorrelationEngine.correlate(
+                        incident=existing_incident,
+                        investigation=existing_incident.investigation,
+                        existing_incidents=self.store.list_all(),
+                    )
+                    existing_incident.investigation["evidence_timeline"] = corr_res.evidence_timeline
+                    existing_incident.investigation["root_cause_analysis"] = corr_res.root_cause_analysis
+                    existing_incident.investigation["blast_radius"] = corr_res.blast_radius
+                    existing_incident.investigation["related_incidents"] = corr_res.related_incidents
+                    if isinstance(existing_incident.diagnosis, dict):
+                        existing_incident.diagnosis["confidence_score"] = corr_res.root_cause_analysis["confidence_score"]
+                        existing_incident.diagnosis["confidence_level"] = corr_res.root_cause_analysis["confidence_level"]
+                        existing_incident.diagnosis["confidence"] = corr_res.root_cause_analysis["confidence_score"] / 100.0
+
                     # Run AI Analysis if triggered
                     if self.ai_analyzer:
                         self.ai_analyzer.analyze_incident(existing_incident)
@@ -219,6 +235,21 @@ class IncidentManager:
                     if self.investigation_engine:
                         inv_res = self.investigation_engine.investigate(new_incident, pod_obj=pod)
                         new_incident.investigation = inv_res.to_dict()
+
+                    # Run Signal Correlation & Evidence-Based RCA
+                    corr_res = CorrelationEngine.correlate(
+                        incident=new_incident,
+                        investigation=new_incident.investigation,
+                        existing_incidents=self.store.list_all(),
+                    )
+                    new_incident.investigation["evidence_timeline"] = corr_res.evidence_timeline
+                    new_incident.investigation["root_cause_analysis"] = corr_res.root_cause_analysis
+                    new_incident.investigation["blast_radius"] = corr_res.blast_radius
+                    new_incident.investigation["related_incidents"] = corr_res.related_incidents
+                    if isinstance(new_incident.diagnosis, dict):
+                        new_incident.diagnosis["confidence_score"] = corr_res.root_cause_analysis["confidence_score"]
+                        new_incident.diagnosis["confidence_level"] = corr_res.root_cause_analysis["confidence_level"]
+                        new_incident.diagnosis["confidence"] = corr_res.root_cause_analysis["confidence_score"] / 100.0
 
                     # Run AI Analysis
                     if self.ai_analyzer:

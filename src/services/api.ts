@@ -1,4 +1,13 @@
-import { ClusterInfo, Incident, IncidentStatus, SeverityLevel } from '../types';
+import {
+  ClusterInfo,
+  ClusterMetricSummary,
+  Incident,
+  IncidentStatus,
+  MetricHistoryResponse,
+  NodeMetric,
+  PodMetric,
+  SeverityLevel,
+} from '../types';
 
 const API_BASE = (((import.meta as any).env?.VITE_SKYOPS_API_URL as string) || '').replace(/\/$/, '');
 
@@ -7,15 +16,78 @@ class ApiService {
     return `${API_BASE}${endpoint}`;
   }
 
+  private async requestWithRetry(
+    url: string,
+    init: RequestInit = {},
+    timeoutMs = 12000,
+    retries = 1
+  ): Promise<Response> {
+    let lastError: any;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        const res = await fetch(url, { ...init, signal: controller.signal });
+        clearTimeout(timer);
+        return res;
+      } catch (e: any) {
+        lastError = e;
+        if (attempt < retries) {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+        }
+      }
+    }
+    if (
+      lastError?.name === 'AbortError' ||
+      lastError?.message?.includes('timed out') ||
+      lastError?.message?.includes('aborted')
+    ) {
+      throw new Error('SkyOps Cloud API request timed out');
+    }
+    throw lastError;
+  }
+
+  /**
+   * Ping backend health endpoint and return live latency, status and timestamp.
+   */
+  async checkHealth(): Promise<{ status: 'CONNECTED' | 'DEGRADED' | 'OFFLINE'; latencyMs: number; timestamp: string }> {
+    const start = performance.now();
+    try {
+      const res = await this.requestWithRetry(this.getUrl('/api/v1/health'), {
+        headers: { Accept: 'application/json' },
+      }, 5000, 1);
+      const duration = Math.round(performance.now() - start);
+      if (res.ok) {
+        return {
+          status: duration > 1500 ? 'DEGRADED' : 'CONNECTED',
+          latencyMs: duration,
+          timestamp: new Date().toISOString(),
+        };
+      } else {
+        return {
+          status: 'DEGRADED',
+          latencyMs: duration,
+          timestamp: new Date().toISOString(),
+        };
+      }
+    } catch {
+      const duration = Math.round(performance.now() - start);
+      return {
+        status: 'OFFLINE',
+        latencyMs: duration,
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
+
   /**
    * Fetch all registered Kubernetes clusters from SkyOps Cloud API.
    * Throws an error if SkyOps Cloud backend is unreachable.
    */
   async fetchClusters(): Promise<ClusterInfo[]> {
-    const res = await fetch(this.getUrl('/api/v1/clusters'), {
+    const res = await this.requestWithRetry(this.getUrl('/api/v1/clusters'), {
       headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(5000),
-    });
+    }, 12000, 1);
 
     if (!res.ok) {
       throw new Error(`SkyOps API error: ${res.status} ${res.statusText}`);
@@ -50,10 +122,9 @@ class ApiService {
     if (status && status !== 'ALL') params.append('status', status);
     if (params.toString()) endpoint += `?${params.toString()}`;
 
-    const res = await fetch(this.getUrl(endpoint), {
+    const res = await this.requestWithRetry(this.getUrl(endpoint), {
       headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(5000),
-    });
+    }, 12000, 1);
 
     if (!res.ok) {
       throw new Error(`SkyOps API error: ${res.status} ${res.statusText}`);
@@ -98,10 +169,9 @@ class ApiService {
     let endpoint = `/api/v1/incidents/${incidentId}`;
     if (clusterId) endpoint += `?cluster_id=${clusterId}`;
 
-    const res = await fetch(this.getUrl(endpoint), {
+    const res = await this.requestWithRetry(this.getUrl(endpoint), {
       headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(5000),
-    });
+    }, 12000, 1);
 
     if (!res.ok) {
       if (res.status === 404) return null;
@@ -140,11 +210,10 @@ class ApiService {
    * Mark an incident as RESOLVED via the SkyOps Cloud Backend API.
    */
   async resolveIncident(incidentId: string): Promise<boolean> {
-    const res = await fetch(this.getUrl(`/api/v1/incidents/${incidentId}/resolve`), {
+    const res = await this.requestWithRetry(this.getUrl(`/api/v1/incidents/${incidentId}/resolve`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(5000),
-    });
+    }, 12000, 1);
 
     if (!res.ok) {
       throw new Error(`Failed to resolve incident '${incidentId}': HTTP ${res.status}`);
@@ -372,12 +441,11 @@ class ApiService {
       };
     }
 
-    const res = await fetch(this.getUrl('/api/v1/incidents'), {
+    const res = await this.requestWithRetry(this.getUrl('/api/v1/incidents'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(5000),
-    });
+    }, 12000, 1);
 
     if (!res.ok) {
       throw new Error(`Failed to inject simulation incident: HTTP ${res.status}`);
@@ -407,6 +475,86 @@ class ApiService {
       ai_analysis: item.ai_analysis || {},
       state_history: item.state_history || [],
     };
+  }
+
+  /**
+   * Fetch resource metrics summary for a specific cluster or default active cluster.
+   */
+  async fetchMetricsSummary(clusterId?: string): Promise<ClusterMetricSummary> {
+    let endpoint = '/api/v1/metrics';
+    if (clusterId && clusterId !== 'ALL') {
+      endpoint += `?cluster_id=${encodeURIComponent(clusterId)}`;
+    }
+
+    const res = await this.requestWithRetry(this.getUrl(endpoint), {
+      headers: { Accept: 'application/json' },
+    }, 12000, 1);
+
+    if (!res.ok) {
+      throw new Error(`Metrics API error: ${res.status}`);
+    }
+
+    return await res.json();
+  }
+
+  /**
+   * Fetch node metrics for cluster(s).
+   */
+  async fetchNodeMetrics(clusterId?: string): Promise<NodeMetric[]> {
+    let endpoint = '/api/v1/metrics/nodes';
+    if (clusterId) {
+      endpoint += `?cluster_id=${encodeURIComponent(clusterId)}`;
+    }
+
+    const res = await this.requestWithRetry(this.getUrl(endpoint), {
+      headers: { Accept: 'application/json' },
+    }, 12000, 1);
+
+    if (!res.ok) {
+      throw new Error(`Node Metrics API error: ${res.status}`);
+    }
+
+    return await res.json();
+  }
+
+  /**
+   * Fetch pod metrics for cluster(s).
+   */
+  async fetchPodMetrics(clusterId?: string): Promise<PodMetric[]> {
+    let endpoint = '/api/v1/metrics/pods';
+    if (clusterId) {
+      endpoint += `?cluster_id=${encodeURIComponent(clusterId)}`;
+    }
+
+    const res = await this.requestWithRetry(this.getUrl(endpoint), {
+      headers: { Accept: 'application/json' },
+    }, 12000, 1);
+
+    if (!res.ok) {
+      throw new Error(`Pod Metrics API error: ${res.status}`);
+    }
+
+    return await res.json();
+  }
+
+  /**
+   * Fetch historical metrics time-series points.
+   */
+  async fetchMetricHistory(clusterId?: string, range: string = '1h'): Promise<MetricHistoryResponse> {
+    let endpoint = `/api/v1/metrics/history?range=${encodeURIComponent(range)}`;
+    if (clusterId && clusterId !== 'ALL') {
+      endpoint += `&cluster_id=${encodeURIComponent(clusterId)}`;
+    }
+
+    const res = await this.requestWithRetry(this.getUrl(endpoint), {
+      headers: { Accept: 'application/json' },
+    }, 12000, 1);
+
+    if (!res.ok) {
+      throw new Error(`Metric History API error: ${res.status}`);
+    }
+
+    return await res.json();
   }
 }
 

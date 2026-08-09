@@ -12,6 +12,7 @@ import {
   X,
   Menu,
   ShieldCheck,
+  BarChart2,
 } from 'lucide-react';
 import { NavTabType } from '../types';
 
@@ -50,6 +51,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: AlertCircle,
       badge: openIncidentCount > 0 ? openIncidentCount : null,
       badgeColor: 'bg-amber-950/80 text-amber-400 border-amber-800/80',
+    },
+    {
+      id: 'metrics' as NavTabType,
+      label: 'Metrics',
+      icon: BarChart2,
+      badge: 'LIVE',
+      badgeColor: 'bg-cyan-950/80 text-cyan-400 border-cyan-800/80',
     },
     {
       id: 'clusters' as NavTabType,

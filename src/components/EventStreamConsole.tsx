@@ -30,6 +30,17 @@ export const EventStreamConsole: React.FC<EventStreamConsoleProps> = ({ clusterI
 
   return (
     <div className="space-y-4 font-mono text-xs text-neutral-200">
+      {/* Simulation / Outbox Notice */}
+      <div className="bg-amber-950/40 border border-amber-800/80 p-2.5 rounded flex items-center justify-between text-[11px] text-amber-200">
+        <div className="flex items-center gap-2">
+          <span className="px-1.5 py-0.5 rounded bg-amber-900 border border-amber-700 font-bold text-[10px] text-amber-300">
+            SIMULATION / BUFFER STREAM
+          </span>
+          <span>Displaying reference event stream for outbox queue validation and agent watcher pipeline testing.</span>
+        </div>
+        <span className="text-amber-400 font-bold">Scope: {clusterId || 'ALL'}</span>
+      </div>
+
       {/* Outbox Queue Telemetry Banner */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-neutral-900 border border-neutral-800 p-3 rounded">
         <div>

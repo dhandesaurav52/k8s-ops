@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -35,6 +35,18 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
   const [sortAsc, setSortAsc] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
+
+  // Reset pagination to page 1 whenever search, severity, status, category, namespace, or cluster filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    filters.searchQuery,
+    filters.severity,
+    filters.status,
+    filters.category,
+    filters.namespace,
+    filters.clusterId,
+  ]);
 
   // Extract unique namespaces and categories for filter dropdowns
   const namespaces = Array.from(

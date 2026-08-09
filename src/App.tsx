@@ -8,6 +8,7 @@ import { IncidentsTable } from './components/IncidentsTable';
 import { IncidentDetailView } from './components/IncidentDetailView';
 import { ClusterOverview } from './components/ClusterOverview';
 import { NodesView } from './components/NodesView';
+import { MetricsView } from './components/MetricsView';
 import { EventStreamConsole } from './components/EventStreamConsole';
 import { SettingsModal } from './components/SettingsModal';
 import { SimulateIncidentModal } from './components/SimulateIncidentModal';
@@ -57,9 +58,12 @@ export default function App() {
         if (refreshed) setSelectedIncident(refreshed);
       }
     } catch (e: any) {
-      console.error('SkyOps Cloud API error:', e);
-      setIsApiUnavailable(true);
-      setApiErrorMessage(e?.message || 'Could not establish connection to SkyOps Cloud Backend');
+      console.warn('SkyOps Cloud API error:', e);
+      // Only show top error banner if no cluster data is present or if user manually refreshed
+      if (!silent || clusters.length === 0) {
+        setIsApiUnavailable(true);
+        setApiErrorMessage(e?.message || 'Could not establish connection to SkyOps Cloud Backend');
+      }
     } finally {
       if (!silent) setIsRefreshing(false);
     }
@@ -237,6 +241,7 @@ export default function App() {
                 <OverviewDashboard
                   clusters={clusters}
                   incidents={incidents}
+                  selectedClusterId={selectedClusterId}
                   onSelectIncident={handleSelectIncident}
                   onNavigateTab={setActiveTab}
                   onSelectCluster={handleSelectCluster}
@@ -253,11 +258,19 @@ export default function App() {
                 />
               )}
 
+              {activeTab === 'metrics' && (
+                <MetricsView
+                  selectedClusterId={selectedClusterId}
+                  clusters={clusters}
+                />
+              )}
+
               {activeTab === 'clusters' && (
                 <ClusterOverview
                   clusters={clusters}
                   selectedClusterId={selectedClusterId}
                   onSelectCluster={handleSelectCluster}
+                  onNavigateTab={setActiveTab}
                 />
               )}
 
