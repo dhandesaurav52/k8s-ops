@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { ClusterInfo, FilterOptions, Incident } from './types';
+import { ClusterInfo, FilterOptions, Incident, NavTabType } from './types';
 import { apiService } from './services/api';
+import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
-import { Navigation, TabType } from './components/Navigation';
+import { OverviewDashboard } from './components/OverviewDashboard';
 import { IncidentsTable } from './components/IncidentsTable';
 import { IncidentDetailView } from './components/IncidentDetailView';
 import { ClusterOverview } from './components/ClusterOverview';
+import { NodesView } from './components/NodesView';
 import { EventStreamConsole } from './components/EventStreamConsole';
+import { SettingsModal } from './components/SettingsModal';
 import { SimulateIncidentModal } from './components/SimulateIncidentModal';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -15,10 +18,12 @@ export default function App() {
   const [clusters, setClusters] = useState<ClusterInfo[]>([]);
   const [selectedClusterId, setSelectedClusterId] = useState<string>('ALL');
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('incidents');
+  const [activeTab, setActiveTab] = useState<NavTabType>('overview');
   const [darkMode, setDarkMode] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isSimulateModalOpen, setIsSimulateModalOpen] = useState<boolean>(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isApiUnavailable, setIsApiUnavailable] = useState<boolean>(false);
   const [apiErrorMessage, setApiErrorMessage] = useState<string>('');
 
@@ -119,7 +124,9 @@ export default function App() {
       if (success) {
         await loadData(true);
         if (selectedIncident && selectedIncident.incident_id === incidentId) {
-          setSelectedIncident((prev) => prev ? { ...prev, status: 'RESOLVED', resolved_at: new Date().toISOString() } : null);
+          setSelectedIncident((prev) =>
+            prev ? { ...prev, status: 'RESOLVED', resolved_at: new Date().toISOString() } : null
+          );
         }
       }
     } catch (err: any) {
@@ -153,93 +160,132 @@ export default function App() {
     <div
       className={`min-h-screen ${
         darkMode ? 'bg-neutral-950 text-neutral-200' : 'bg-neutral-900 text-neutral-100'
-      } font-mono selection:bg-cyan-500/30 selection:text-cyan-200`}
+      } font-mono selection:bg-cyan-500/30 selection:text-cyan-200 flex`}
     >
-      {/* Top Header Bar */}
-      <Header
-        clusters={clusters}
-        selectedClusterId={selectedClusterId}
-        onSelectCluster={handleSelectCluster}
-        activeIncidentCount={activeIncidentCount}
-        criticalIncidentCount={criticalIncidentCount}
-        searchQuery={filters.searchQuery}
-        onSearchChange={(q) => setFilters({ ...filters, searchQuery: q })}
-        darkMode={darkMode}
-        onToggleDarkMode={() => setDarkMode(!darkMode)}
-        isRefreshing={isRefreshing}
-        onRefresh={() => loadData(false)}
-        onOpenSimulateModal={() => setIsSimulateModalOpen(true)}
+      {/* Left Navigation Sidebar */}
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          setSelectedIncident(null);
+          window.location.hash = '';
+        }}
+        openIncidentCount={activeIncidentCount}
+        totalClusterCount={clusters.length}
+        isCloudConnected={!isApiUnavailable}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        isMobileOpen={isMobileSidebarOpen}
+        onToggleMobile={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
       />
 
-      {/* Backend API Error Banner */}
-      {isApiUnavailable && (
-        <div className="bg-red-950/90 border-b border-red-800/80 px-4 py-2.5 flex items-center justify-between text-xs text-red-200 shadow-lg">
-          <div className="flex items-center space-x-2.5">
-            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 animate-pulse" />
-            <span className="font-bold text-red-100 uppercase tracking-wider">
-              SkyOps Cloud unavailable
-            </span>
-            <span className="text-red-300 border-l border-red-800/60 pl-2.5">
-              {apiErrorMessage || 'Could not establish connection to live Cloud telemetry service'}
-            </span>
-          </div>
-          <button
-            onClick={() => loadData(false)}
-            disabled={isRefreshing}
-            className="px-3 py-1 bg-red-900/90 hover:bg-red-800 border border-red-700/80 rounded text-red-100 font-mono text-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
-          >
-            <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>Retry Connection</span>
-          </button>
-        </div>
-      )}
-
-      {/* Navigation Sub-header (Shown when not in deep investigation detail view) */}
-      {!selectedIncident && (
-        <Navigation
-          activeTab={activeTab}
-          onTabChange={(tab) => setActiveTab(tab)}
-          openIncidentCount={activeIncidentCount}
-          totalClusterCount={clusters.length}
+      {/* Main Content Workspace (Offset by Sidebar width on large screens) */}
+      <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
+        {/* Top Header Bar */}
+        <Header
+          clusters={clusters}
+          selectedClusterId={selectedClusterId}
+          onSelectCluster={handleSelectCluster}
+          activeIncidentCount={activeIncidentCount}
+          criticalIncidentCount={criticalIncidentCount}
+          searchQuery={filters.searchQuery}
+          onSearchChange={(q) => setFilters({ ...filters, searchQuery: q })}
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode(!darkMode)}
+          isRefreshing={isRefreshing}
+          onRefresh={() => loadData(false)}
+          onOpenSimulateModal={() => setIsSimulateModalOpen(true)}
+          onToggleMobileSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+          isCloudConnected={!isApiUnavailable}
         />
-      )}
 
-      {/* Main Container */}
-      <main className="mx-auto p-3 max-w-[1600px]">
-        {selectedIncident ? (
-          /* FLAGSHIP INCIDENT INVESTIGATION CONSOLE */
-          <IncidentDetailView
-            incident={selectedIncident}
-            onBack={handleBackToTable}
-            onResolve={handleResolveIncident}
-          />
-        ) : (
-          /* TABBED VIEWS */
-          <>
-            {activeTab === 'incidents' && (
-              <IncidentsTable
-                incidents={incidents}
-                onSelectIncident={handleSelectIncident}
-                filters={filters}
-                onFilterChange={setFilters}
-                onResolveIncident={handleResolveIncident}
-              />
-            )}
-
-            {activeTab === 'infrastructure' && (
-              <ClusterOverview
-                clusters={clusters}
-                selectedClusterId={selectedClusterId}
-                onSelectCluster={handleSelectCluster}
-              />
-            )}
-
-            {activeTab === 'events' && (
-              <EventStreamConsole clusterId={selectedClusterId} />
-            )}
-          </>
+        {/* Backend API Error Banner */}
+        {isApiUnavailable && (
+          <div className="bg-red-950/90 border-b border-red-800/80 px-4 py-2.5 flex items-center justify-between text-xs text-red-200 shadow-lg">
+            <div className="flex items-center space-x-2.5">
+              <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 animate-pulse" />
+              <span className="font-bold text-red-100 uppercase tracking-wider">
+                SkyOps Cloud unavailable
+              </span>
+              <span className="text-red-300 border-l border-red-800/60 pl-2.5">
+                {apiErrorMessage || 'Could not establish connection to live Cloud telemetry service'}
+              </span>
+            </div>
+            <button
+              onClick={() => loadData(false)}
+              disabled={isRefreshing}
+              className="px-3 py-1 bg-red-900/90 hover:bg-red-800 border border-red-700/80 rounded text-red-100 font-mono text-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
+            >
+              <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>Retry Connection</span>
+            </button>
+          </div>
         )}
-      </main>
+
+        {/* Main Body Page View */}
+        <main className="p-4 flex-1 overflow-x-hidden">
+          {selectedIncident ? (
+            /* FLAGSHIP INCIDENT INVESTIGATION CONSOLE */
+            <IncidentDetailView
+              incident={selectedIncident}
+              onBack={handleBackToTable}
+              onResolve={handleResolveIncident}
+            />
+          ) : (
+            /* TABBED VIEWS */
+            <>
+              {activeTab === 'overview' && (
+                <OverviewDashboard
+                  clusters={clusters}
+                  incidents={incidents}
+                  onSelectIncident={handleSelectIncident}
+                  onNavigateTab={setActiveTab}
+                  onSelectCluster={handleSelectCluster}
+                />
+              )}
+
+              {activeTab === 'incidents' && (
+                <IncidentsTable
+                  incidents={incidents}
+                  onSelectIncident={handleSelectIncident}
+                  filters={filters}
+                  onFilterChange={setFilters}
+                  onResolveIncident={handleResolveIncident}
+                />
+              )}
+
+              {activeTab === 'clusters' && (
+                <ClusterOverview
+                  clusters={clusters}
+                  selectedClusterId={selectedClusterId}
+                  onSelectCluster={handleSelectCluster}
+                />
+              )}
+
+              {activeTab === 'nodes' && (
+                <NodesView
+                  clusters={clusters}
+                  selectedClusterId={selectedClusterId}
+                  onSelectCluster={handleSelectCluster}
+                />
+              )}
+
+              {activeTab === 'events' && (
+                <EventStreamConsole clusterId={selectedClusterId} />
+              )}
+            </>
+          )}
+        </main>
+      </div>
+
+      {/* System Settings & API Modal */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        isCloudConnected={!isApiUnavailable}
+        clusters={clusters}
+        incidents={incidents}
+        onRefresh={() => loadData(false)}
+      />
 
       {/* Simulation Trigger Modal */}
       <SimulateIncidentModal

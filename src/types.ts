@@ -1,6 +1,7 @@
 export type SeverityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 export type IncidentStatus = 'OPEN' | 'RESOLVED';
 export type ClusterStatus = 'CONNECTED' | 'DISCONNECTED' | 'DEGRADED' | 'STUB';
+export type NavTabType = 'overview' | 'incidents' | 'clusters' | 'nodes' | 'events';
 
 export interface ResourceRef {
   kind: string;

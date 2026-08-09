@@ -3,15 +3,15 @@ import {
   AlertTriangle,
   ArrowUpDown,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   Filter,
   Layers,
-  Search,
+  RotateCcw,
   ShieldAlert,
   Clock,
-  RotateCcw,
 } from 'lucide-react';
-import { FilterOptions, Incident, IncidentStatus, SeverityLevel } from '../types';
+import { FilterOptions, Incident } from '../types';
 import { SeverityBadge, StatusBadge } from './IncidentStatusBadge';
 
 interface IncidentsTableProps {
@@ -33,6 +33,8 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
 }) => {
   const [sortField, setSortField] = useState<SortField>('last_seen');
   const [sortAsc, setSortAsc] = useState<boolean>(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   // Extract unique namespaces and categories for filter dropdowns
   const namespaces = Array.from(
@@ -92,6 +94,12 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
     return sortAsc ? -comparison : comparison;
   });
 
+  // Pagination calculations
+  const totalPages = Math.ceil(sortedIncidents.length / pageSize) || 1;
+  const validCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (validCurrentPage - 1) * pageSize;
+  const paginatedIncidents = sortedIncidents.slice(startIndex, startIndex + pageSize);
+
   const handleSortToggle = (field: SortField) => {
     if (sortField === field) {
       setSortAsc(!sortAsc);
@@ -116,10 +124,10 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
   };
 
   return (
-    <div className="space-y-3 font-mono text-xs">
+    <div className="space-y-3 font-mono text-xs text-neutral-200">
       {/* Dense Operational Summary Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 bg-neutral-900 border border-neutral-800 p-2.5 rounded">
-        <div className="border-r border-neutral-800/60 pr-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 bg-neutral-900 border border-neutral-800 p-2.5 rounded shadow">
+        <div className="border-r border-neutral-800/80 pr-2">
           <div className="text-[10px] text-neutral-500 uppercase tracking-wider">ACTIVE INCIDENTS</div>
           <div className="text-lg font-bold text-neutral-100 flex items-center gap-1.5 mt-0.5">
             <AlertTriangle className="w-4 h-4 text-amber-400" />
@@ -127,7 +135,7 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
           </div>
         </div>
 
-        <div className="border-r border-neutral-800/60 pr-2">
+        <div className="border-r border-neutral-800/80 pr-2">
           <div className="text-[10px] text-neutral-500 uppercase tracking-wider">CRITICAL</div>
           <div className="text-lg font-bold text-red-400 flex items-center gap-1.5 mt-0.5">
             <ShieldAlert className="w-4 h-4 text-red-400" />
@@ -135,19 +143,19 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
           </div>
         </div>
 
-        <div className="border-r border-neutral-800/60 pr-2">
+        <div className="border-r border-neutral-800/80 pr-2">
           <div className="text-[10px] text-neutral-500 uppercase tracking-wider">HIGH</div>
           <div className="text-lg font-bold text-orange-400 mt-0.5">{highCount}</div>
         </div>
 
-        <div className="border-r border-neutral-800/60 pr-2">
+        <div className="border-r border-neutral-800/80 pr-2">
           <div className="text-[10px] text-neutral-500 uppercase tracking-wider">MEDIUM / LOW</div>
           <div className="text-lg font-bold text-yellow-400 mt-0.5">
             {mediumCount} <span className="text-neutral-500 text-xs font-normal">/ {lowCount}</span>
           </div>
         </div>
 
-        <div className="border-r border-neutral-800/60 pr-2">
+        <div className="border-r border-neutral-800/80 pr-2">
           <div className="text-[10px] text-neutral-500 uppercase tracking-wider">RESOLVED</div>
           <div className="text-lg font-bold text-emerald-400 flex items-center gap-1.5 mt-0.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -162,7 +170,7 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
       </div>
 
       {/* Filter Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-neutral-900/80 border border-neutral-800 p-2 rounded">
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-neutral-900 border border-neutral-800 p-2 rounded">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 text-neutral-400 text-[11px] font-medium mr-1">
             <Filter className="w-3.5 h-3.5 text-neutral-500" />
@@ -239,7 +247,7 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
                 namespace: 'ALL',
               })
             }
-            className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 font-medium px-2 py-0.5 rounded border border-cyan-800/60 bg-cyan-950/40"
+            className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 font-medium px-2 py-0.5 rounded border border-cyan-800/60 bg-cyan-950/40 cursor-pointer"
           >
             <RotateCcw className="w-3 h-3" />
             RESET FILTERS
@@ -252,54 +260,54 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
         <table className="w-full text-left border-collapse font-mono text-xs">
           <thead>
             <tr className="border-b border-neutral-800 bg-neutral-900/90 text-neutral-400 select-none uppercase text-[10px] tracking-wider">
-              <th className="py-2 px-3 font-semibold w-24">
+              <th className="py-2.5 px-3 font-semibold w-24">
                 <button
                   onClick={() => handleSortToggle('incident_id')}
-                  className="flex items-center gap-1 hover:text-neutral-200"
+                  className="flex items-center gap-1 hover:text-neutral-200 cursor-pointer"
                 >
                   ID <ArrowUpDown className="w-3 h-3 text-neutral-600" />
                 </button>
               </th>
-              <th className="py-2 px-3 font-semibold w-24">
+              <th className="py-2.5 px-3 font-semibold w-24">
                 <button
                   onClick={() => handleSortToggle('severity')}
-                  className="flex items-center gap-1 hover:text-neutral-200"
+                  className="flex items-center gap-1 hover:text-neutral-200 cursor-pointer"
                 >
                   SEVERITY <ArrowUpDown className="w-3 h-3 text-neutral-600" />
                 </button>
               </th>
-              <th className="py-2 px-3 font-semibold w-20">STATUS</th>
-              <th className="py-2 px-3 font-semibold">
+              <th className="py-2.5 px-3 font-semibold w-20">STATUS</th>
+              <th className="py-2.5 px-3 font-semibold">
                 <button
                   onClick={() => handleSortToggle('resource_name')}
-                  className="flex items-center gap-1 hover:text-neutral-200"
+                  className="flex items-center gap-1 hover:text-neutral-200 cursor-pointer"
                 >
                   TARGET RESOURCE <ArrowUpDown className="w-3 h-3 text-neutral-600" />
                 </button>
               </th>
-              <th className="py-2 px-3 font-semibold w-36">
+              <th className="py-2.5 px-3 font-semibold w-36">
                 <button
                   onClick={() => handleSortToggle('category')}
-                  className="flex items-center gap-1 hover:text-neutral-200"
+                  className="flex items-center gap-1 hover:text-neutral-200 cursor-pointer"
                 >
                   CATEGORY <ArrowUpDown className="w-3 h-3 text-neutral-600" />
                 </button>
               </th>
-              <th className="py-2 px-3 font-semibold min-w-[200px]">CURRENT STATE & REASON</th>
-              <th className="py-2 px-3 font-semibold text-center w-16">SEEN</th>
-              <th className="py-2 px-3 font-semibold text-right w-28">
+              <th className="py-2.5 px-3 font-semibold min-w-[200px]">CURRENT STATE</th>
+              <th className="py-2.5 px-3 font-semibold text-center w-16">SEEN</th>
+              <th className="py-2.5 px-3 font-semibold text-right w-28">
                 <button
                   onClick={() => handleSortToggle('last_seen')}
-                  className="flex items-center gap-1 hover:text-neutral-200 justify-end w-full"
+                  className="flex items-center gap-1 hover:text-neutral-200 justify-end w-full cursor-pointer"
                 >
                   LAST SEEN <ArrowUpDown className="w-3 h-3 text-neutral-600" />
                 </button>
               </th>
-              <th className="py-2 px-3 font-semibold text-center w-16">ACTION</th>
+              <th className="py-2.5 px-3 font-semibold text-center w-20">ACTION</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-800/80">
-            {sortedIncidents.length === 0 ? (
+            {paginatedIncidents.length === 0 ? (
               <tr>
                 <td colSpan={9} className="py-8 text-center text-neutral-500 font-mono">
                   <div className="flex flex-col items-center justify-center gap-2">
@@ -309,7 +317,7 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
                 </td>
               </tr>
             ) : (
-              sortedIncidents.map((inc) => {
+              paginatedIncidents.map((inc) => {
                 const isResolved = inc.status === 'RESOLVED';
                 return (
                   <tr
@@ -385,7 +393,7 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
                       {!isResolved ? (
                         <button
                           onClick={() => onResolveIncident(inc.incident_id)}
-                          className="px-2 py-1 bg-emerald-950 text-emerald-400 hover:bg-emerald-900 border border-emerald-800 rounded text-[10px] font-mono font-medium transition-colors"
+                          className="px-2 py-1 bg-emerald-950 text-emerald-400 hover:bg-emerald-900 border border-emerald-800 rounded text-[10px] font-mono font-medium transition-colors cursor-pointer"
                           title="Mark incident resolved"
                         >
                           RESOLVE
@@ -402,6 +410,53 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
             )}
           </tbody>
         </table>
+
+        {/* Table Footer / Pagination Controls */}
+        <div className="p-2.5 bg-neutral-900 border-t border-neutral-800 flex items-center justify-between text-xs text-neutral-400">
+          <div>
+            Showing <strong className="text-neutral-200">{paginatedIncidents.length}</strong> of{' '}
+            <strong className="text-neutral-200">{sortedIncidents.length}</strong> filtered incidents
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span>Per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-neutral-950 border border-neutral-800 rounded px-1.5 py-0.5 text-xs text-neutral-200"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                disabled={validCurrentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="p-1 rounded bg-neutral-950 border border-neutral-800 text-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-800"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="px-2 text-neutral-300 font-bold">
+                {validCurrentPage} / {totalPages}
+              </span>
+              <button
+                disabled={validCurrentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className="p-1 rounded bg-neutral-950 border border-neutral-800 text-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-800"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

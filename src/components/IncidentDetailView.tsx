@@ -4,18 +4,17 @@ import {
   ArrowLeft,
   Check,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   Clock,
   Copy,
   Cpu,
-  Database,
   FileCode,
   FileText,
   GitBranch,
   Layers,
   ListOrdered,
   RefreshCw,
+  Search,
   Server,
   ShieldAlert,
   Sparkles,
@@ -37,31 +36,42 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
   onResolve,
   onReanalyze,
 }) => {
-  const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
+  const [copiedText, setCopiedText] = useState<string | null>(null);
   const [showRawJson, setShowRawJson] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'evidence' | 'graph' | 'raw'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'evidence' | 'graph'>('overview');
+  const [logSearchQuery, setLogSearchQuery] = useState<string>('');
 
   const diagnosis = incident.diagnosis || {};
   const investigation = incident.investigation || {};
   const aiAnalysis = incident.ai_analysis || {};
-  const resource = incident.resource || { kind: 'Pod', namespace: 'default', name: 'unknown', uid: 'unknown' };
+  const resource = incident.resource || {
+    kind: 'Pod',
+    namespace: 'default',
+    name: 'unknown',
+    uid: 'unknown',
+  };
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
-    setCopiedCommand(text);
-    setTimeout(() => setCopiedCommand(null), 2000);
+    setCopiedText(text);
+    setTimeout(() => setCopiedText(null), 2000);
   };
 
   const isResolved = incident.status === 'RESOLVED';
 
+  const rawLogs = investigation.recent_logs || [];
+  const filteredLogs = rawLogs.filter((log: string) =>
+    logSearchQuery ? log.toLowerCase().includes(logSearchQuery.toLowerCase()) : true
+  );
+
   return (
-    <div className="space-y-4 font-mono text-xs text-neutral-200">
+    <div className="space-y-4 font-mono text-xs text-neutral-200 select-none">
       {/* Top Breadcrumb & Control Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-neutral-900 border border-neutral-800 p-2.5 rounded">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-neutral-900 border border-neutral-800 p-2.5 rounded shadow">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-neutral-950 hover:bg-neutral-800 border border-neutral-700 rounded text-neutral-300 font-medium transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-neutral-950 hover:bg-neutral-800 border border-neutral-700 rounded text-neutral-200 font-semibold transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>BACK TO INCIDENTS</span>
@@ -81,7 +91,7 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
           {!isResolved && (
             <button
               onClick={() => onResolve(incident.incident_id)}
-              className="flex items-center gap-1.5 px-3 py-1 bg-emerald-950 text-emerald-400 hover:bg-emerald-900 border border-emerald-800 rounded font-bold transition-colors shadow-lg"
+              className="flex items-center gap-1.5 px-3 py-1 bg-emerald-950 text-emerald-400 hover:bg-emerald-900 border border-emerald-800 rounded font-bold transition-colors cursor-pointer shadow-lg"
             >
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
               <span>MARK RESOLVED</span>
@@ -90,9 +100,9 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
 
           <button
             onClick={() => setShowRawJson(!showRawJson)}
-            className={`flex items-center gap-1 px-2.5 py-1 border rounded transition-colors ${
+            className={`flex items-center gap-1 px-2.5 py-1 border rounded transition-colors cursor-pointer ${
               showRawJson
-                ? 'bg-cyan-950 text-cyan-400 border-cyan-800'
+                ? 'bg-cyan-950 text-cyan-400 border-cyan-800 font-bold'
                 : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:border-neutral-700'
             }`}
           >
@@ -105,14 +115,14 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
       {/* Flagship Incident Banner */}
       <div className="bg-neutral-900 border border-neutral-800 rounded p-4 shadow-2xl relative overflow-hidden">
         {/* Top Status Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800/80 pb-3 mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800 pb-3 mb-3">
           <div className="flex items-center gap-2.5">
             <SeverityBadge severity={incident.severity} className="text-xs px-2 py-0.5" />
             <StatusBadge status={incident.status} className="text-xs px-2 py-0.5" />
-            <span className="px-2 py-0.5 bg-neutral-950 border border-neutral-800 rounded text-neutral-300 font-semibold">
+            <span className="px-2 py-0.5 bg-neutral-950 border border-neutral-800 rounded text-neutral-300 font-bold">
               {incident.category}
             </span>
-            <span className="text-neutral-500">
+            <span className="text-neutral-400">
               Occurrences: <strong className="text-neutral-200">{incident.occurrences}x</strong>
             </span>
           </div>
@@ -147,7 +157,7 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
           <div>
             <div className="text-[10px] text-neutral-500 uppercase">NODE LOCATION</div>
             <div className="font-semibold text-neutral-200 mt-0.5 flex items-center gap-1">
-              <Server className="w-3 h-3 text-neutral-500" />
+              <Server className="w-3.5 h-3.5 text-neutral-500" />
               {investigation.node_name || 'Unassigned / Pending'}
             </div>
           </div>
@@ -164,9 +174,12 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
       {/* View Tabs */}
       <div className="flex items-center gap-1 border-b border-neutral-800 bg-neutral-950 px-1">
         <button
-          onClick={() => setActiveTab('overview')}
-          className={`flex items-center gap-1.5 px-3 py-2 border-b-2 font-semibold transition-colors ${
-            activeTab === 'overview'
+          onClick={() => {
+            setActiveTab('overview');
+            setShowRawJson(false);
+          }}
+          className={`flex items-center gap-1.5 px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer ${
+            activeTab === 'overview' && !showRawJson
               ? 'border-cyan-500 text-cyan-400 bg-neutral-900/50'
               : 'border-transparent text-neutral-400 hover:text-neutral-200'
           }`}
@@ -176,9 +189,12 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveTab('evidence')}
-          className={`flex items-center gap-1.5 px-3 py-2 border-b-2 font-semibold transition-colors ${
-            activeTab === 'evidence'
+          onClick={() => {
+            setActiveTab('evidence');
+            setShowRawJson(false);
+          }}
+          className={`flex items-center gap-1.5 px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer ${
+            activeTab === 'evidence' && !showRawJson
               ? 'border-cyan-500 text-cyan-400 bg-neutral-900/50'
               : 'border-transparent text-neutral-400 hover:text-neutral-200'
           }`}
@@ -188,9 +204,12 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveTab('graph')}
-          className={`flex items-center gap-1.5 px-3 py-2 border-b-2 font-semibold transition-colors ${
-            activeTab === 'graph'
+          onClick={() => {
+            setActiveTab('graph');
+            setShowRawJson(false);
+          }}
+          className={`flex items-center gap-1.5 px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer ${
+            activeTab === 'graph' && !showRawJson
               ? 'border-cyan-500 text-cyan-400 bg-neutral-900/50'
               : 'border-transparent text-neutral-400 hover:text-neutral-200'
           }`}
@@ -202,14 +221,14 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
 
       {/* RAW JSON VIEW MODAL/PANEL */}
       {showRawJson && (
-        <div className="bg-neutral-900 border border-neutral-800 rounded p-3">
-          <div className="flex items-center justify-between mb-2 pb-1 border-b border-neutral-800">
+        <div className="bg-neutral-900 border border-neutral-800 rounded p-3 space-y-2">
+          <div className="flex items-center justify-between pb-1 border-b border-neutral-800">
             <span className="font-bold text-cyan-400">Raw Incident Payload (JSON)</span>
             <button
               onClick={() => handleCopy(JSON.stringify(incident, null, 2))}
-              className="flex items-center gap-1 px-2 py-0.5 bg-neutral-950 border border-neutral-800 rounded hover:border-neutral-700 text-neutral-300"
+              className="flex items-center gap-1 px-2 py-0.5 bg-neutral-950 border border-neutral-800 rounded hover:border-neutral-700 text-neutral-300 cursor-pointer"
             >
-              {copiedCommand === JSON.stringify(incident, null, 2) ? (
+              {copiedText === JSON.stringify(incident, null, 2) ? (
                 <Check className="w-3 h-3 text-emerald-400" />
               ) : (
                 <Copy className="w-3 h-3 text-neutral-400" />
@@ -280,12 +299,12 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                     <code className="truncate mr-2">{diagnosis.mitigation_command}</code>
                     <button
                       onClick={() => handleCopy(diagnosis.mitigation_command!)}
-                      className="flex items-center gap-1 px-2 py-1 bg-cyan-950 hover:bg-cyan-900 text-cyan-400 border border-cyan-800 rounded shrink-0 font-medium transition-colors"
+                      className="flex items-center gap-1 px-2.5 py-1 bg-cyan-950 hover:bg-cyan-900 text-cyan-400 border border-cyan-800 rounded shrink-0 font-bold transition-colors cursor-pointer"
                     >
-                      {copiedCommand === diagnosis.mitigation_command ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
+                      {copiedText === diagnosis.mitigation_command ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
                       ) : (
-                        <Copy className="w-3 h-3 text-cyan-400" />
+                        <Copy className="w-3.5 h-3.5 text-cyan-400" />
                       )}
                       <span>COPY</span>
                     </button>
@@ -308,9 +327,13 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                         <code className="truncate mr-2">{cmd}</code>
                         <button
                           onClick={() => handleCopy(cmd)}
-                          className="text-neutral-500 hover:text-neutral-200 text-[10px]"
+                          className="text-neutral-500 hover:text-neutral-200 text-[10px] cursor-pointer"
                         >
-                          {copiedCommand === cmd ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                          {copiedText === cmd ? (
+                            <Check className="w-3 h-3 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
                         </button>
                       </div>
                     ))}
@@ -405,7 +428,9 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                   ]).map((cs: any, idx: number) => (
                     <tr key={idx} className="hover:bg-neutral-950/60">
                       <td className="py-2 px-3 font-bold text-neutral-200">{cs.name}</td>
-                      <td className="py-2 px-3 text-neutral-400 text-[11px] truncate max-w-xs">{cs.image}</td>
+                      <td className="py-2 px-3 text-neutral-400 text-[11px] truncate max-w-xs">
+                        {cs.image}
+                      </td>
                       <td className="py-2 px-3">
                         <span className="px-1.5 py-0.5 rounded bg-neutral-950 border border-neutral-800 text-neutral-300">
                           {cs.state_type}
@@ -414,7 +439,7 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                       <td className="py-2 px-3 text-amber-400 font-bold">{cs.reason || cs.message || '-'}</td>
                       <td className="py-2 px-3 text-center font-bold text-neutral-200">{cs.restart_count}</td>
                       <td className="py-2 px-3 text-center text-red-400 font-mono font-bold">
-                        {cs.exit_code ? `137` : '-'}
+                        {cs.exit_code ? cs.exit_code : '-'}
                       </td>
                     </tr>
                   ))}
@@ -458,7 +483,8 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                     <span className="text-neutral-400 text-xs">{evt.message}</span>
                   </div>
                   <div className="text-[10px] text-neutral-500 font-mono shrink-0">
-                    Count: {evt.count}x • {evt.last_timestamp ? new Date(evt.last_timestamp).toLocaleTimeString() : 'recently'}
+                    Count: {evt.count}x •{' '}
+                    {evt.last_timestamp ? new Date(evt.last_timestamp).toLocaleTimeString() : 'recently'}
                   </div>
                 </div>
               ))}
@@ -466,18 +492,47 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
           </div>
 
           {/* Recent Logs Stream */}
-          <div className="bg-neutral-900 border border-neutral-800 rounded p-4">
-            <div className="font-bold text-neutral-100 mb-2 pb-2 border-b border-neutral-800 text-sm flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-emerald-400" />
-              <span>RECENT CONTAINER STDERR/STDOUT LOGS</span>
+          <div className="bg-neutral-900 border border-neutral-800 rounded p-4 space-y-2">
+            <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
+              <div className="font-bold text-neutral-100 text-sm flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-emerald-400" />
+                <span>RECENT CONTAINER LOGS STREAM</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative w-48">
+                  <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-neutral-500" />
+                  <input
+                    type="text"
+                    value={logSearchQuery}
+                    onChange={(e) => setLogSearchQuery(e.target.value)}
+                    placeholder="Search logs..."
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded pl-6 pr-2 py-0.5 text-[11px] text-neutral-200 focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+
+                {rawLogs.length > 0 && (
+                  <button
+                    onClick={() => handleCopy(rawLogs.join('\n'))}
+                    className="flex items-center gap-1 px-2 py-0.5 bg-neutral-950 border border-neutral-800 rounded text-neutral-300 hover:border-neutral-700 cursor-pointer text-[10px]"
+                  >
+                    {copiedText === rawLogs.join('\n') ? (
+                      <Check className="w-3 h-3 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-neutral-400" />
+                    )}
+                    <span>COPY LOGS</span>
+                  </button>
+                )}
+              </div>
             </div>
 
-            <div className="bg-neutral-950 border border-neutral-800 p-3 rounded font-mono text-emerald-400 text-[11px] space-y-1 max-h-64 overflow-y-auto">
-              {(investigation.recent_logs && investigation.recent_logs.length > 0 ? (
-                investigation.recent_logs.map((log: string, i: number) => <div key={i}>{log}</div>)
+            <div className="bg-neutral-950 border border-neutral-800 p-3 rounded font-mono text-emerald-400 text-[11px] space-y-1 max-h-72 overflow-y-auto">
+              {filteredLogs.length > 0 ? (
+                filteredLogs.map((log: string, i: number) => <div key={i}>{log}</div>)
               ) : (
-                <div className="text-neutral-600 italic">No logs available for pending pod.</div>
-              ))}
+                <div className="text-neutral-600 italic">No logs available for this container state.</div>
+              )}
             </div>
           </div>
         </div>
@@ -519,7 +574,9 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                 ) : (
                   <div className="flex items-center gap-2">
                     <Layers className="w-4 h-4 text-purple-400" />
-                    <span className="font-semibold text-purple-300">Workload: Deployment/{resource.name.split('-')[0]}</span>
+                    <span className="font-semibold text-purple-300">
+                      Workload: Deployment/{resource.name.split('-')[0]}
+                    </span>
                   </div>
                 )}
 
