@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { Incident } from '../types';
 import { SeverityBadge, StatusBadge } from './IncidentStatusBadge';
+import { apiService } from '../services/api';
 
 interface IncidentDetailViewProps {
   incident: Incident;
@@ -430,11 +431,10 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                   <button
                     onClick={async () => {
                       try {
-                        const res = await fetch(`/api/v1/remediations/${incident.incident_id}/dry-run`, { method: 'POST' });
-                        const data = await res.json();
-                        alert(`Dry Run Result: ${data.result?.expected_effect || 'Dry run passed without mutating cluster state.'}`);
-                      } catch (e) {
-                        alert('Dry Run completed successfully: All preconditions passed.');
+                        const data = await apiService.dryRunRemediation(incident.incident_id);
+                        alert(`Dry Run Result: ${data.result?.expected_effect || data.detail || 'Dry run passed without mutating cluster state.'}`);
+                      } catch (e: any) {
+                        alert(`Dry Run error: ${e.message || e}`);
                       }
                     }}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-200 font-bold rounded cursor-pointer transition-colors"
@@ -446,14 +446,10 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                   <button
                     onClick={async () => {
                       try {
-                        await fetch(`/api/v1/remediations/${incident.incident_id}/approve`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ approved_by: 'operator@skyops.internal' }),
-                        });
+                        await apiService.approveRemediation(incident.incident_id, 'operator@skyops.internal');
                         alert('Remediation action APPROVED by operator.');
-                      } catch (e) {
-                        alert('Remediation action APPROVED by operator.');
+                      } catch (e: any) {
+                        alert(`Approve response: ${e.message || 'APPROVED'}`);
                       }
                     }}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-950 hover:bg-emerald-900 border border-emerald-800 text-emerald-400 font-bold rounded cursor-pointer transition-colors"
@@ -465,16 +461,15 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                   <button
                     onClick={async () => {
                       try {
-                        const res = await fetch(`/api/v1/remediations/${incident.incident_id}/execute`, { method: 'POST' });
-                        const data = await res.json();
+                        const data = await apiService.executeRemediation(incident.incident_id);
                         if (data.status === 'ALREADY_EXECUTED') {
                           alert('Action previously executed. Idempotency check prevented duplicate call.');
                         } else {
                           alert('Remediation executed and verified healthy! Incident marked RESOLVED.');
                           onResolve(incident.incident_id);
                         }
-                      } catch (e) {
-                        alert('Remediation executed and verified healthy! Incident marked RESOLVED.');
+                      } catch (e: any) {
+                        alert(`Execute response: ${e.message || 'Executed'}`);
                         onResolve(incident.incident_id);
                       }
                     }}

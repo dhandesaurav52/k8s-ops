@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 
 class ClusterCreate(BaseModel):
@@ -35,4 +35,6 @@ class ClusterResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        orm_mode = True
+        from_attributes = True

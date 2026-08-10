@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "skyops.fullname" . }}-config
+  labels:
+    {{- include "skyops.labels" . | nindent 4 }}
+data:
+  SKYOPS_SERVER_URL: {{ .Values.server.url | quote }}

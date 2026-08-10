@@ -54,7 +54,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     setError(null);
 
     try {
-      const clusterParam = selectedClusterId === 'ALL' ? 'skyops-cluster-prod-us' : selectedClusterId;
+      const clusterParam = selectedClusterId === 'ALL' ? undefined : selectedClusterId;
       const [sumData, histData] = await Promise.all([
         apiService.fetchMetricsSummary(clusterParam),
         apiService.fetchMetricHistory(clusterParam, timeRange),

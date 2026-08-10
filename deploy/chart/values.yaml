@@ -1,0 +1,88 @@
+# Default values for skyops.
+# This is a YAML-formatted file.
+
+image:
+  repository: dhandesaurav52/skyops-agent
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "0.1.0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+server:
+  # SkyOps Server URL endpoint
+  url: "http://skyops-server.skyops.svc.cluster.local:8000"
+
+agent:
+  # Optional secret token for agent-to-server authentication
+  token: ""
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+gemini:
+  # Optional Gemini API key for AI-assisted root cause diagnosis
+  apiKey: ""
+
+# Optional existing Kubernetes Secret containing SKYOPS_AGENT_TOKEN / GEMINI_API_KEY
+existingSecret: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+rbac:
+  create: true
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+persistence:
+  # Toggle persistent storage for outbox/data directory
+  enabled: false
+  mountPath: /app/data
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  storageClass: ""
+  existingClaim: ""
+
+probes:
+  liveness:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3

@@ -1,7 +1,7 @@
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 
 def utc_now_iso() -> str:
@@ -31,7 +31,7 @@ class Incident:
     updated_at: str = field(default_factory=utc_now_iso)
     last_seen: str = field(default_factory=utc_now_iso)
     resolved_at: Optional[str] = None
-    state_history: List[str] = field(default_factory=list)
+    state_history: List[Union[str, Dict[str, Any]]] = field(default_factory=list)
     evidence: List[Dict[str, Any]] = field(default_factory=list)
     diagnosis: Dict[str, Any] = field(default_factory=dict)
     recommendations: List[str] = field(default_factory=list)
@@ -50,6 +50,18 @@ class Incident:
                 self.resource.uid or self.resource.name,
                 self.category,
             )
+
+    @staticmethod
+    def normalize_state_history_entry(entry: Any, default_reason: Optional[str] = None) -> Dict[str, Any]:
+        now_iso = utc_now_iso()
+        if isinstance(entry, dict):
+            st = entry.get("state") or entry.get("reason") or default_reason or "Unknown"
+            rs = entry.get("reason") or entry.get("state") or default_reason or "Unknown"
+            ts = entry.get("timestamp") or now_iso
+            return {"state": st, "timestamp": ts, "reason": rs}
+        st_str = str(entry)
+        rs_str = default_reason or st_str
+        return {"state": st_str, "timestamp": now_iso, "reason": rs_str}
 
     @staticmethod
     def compute_identity_key(namespace: str, kind: str, uid_or_name: str, category: str) -> str:

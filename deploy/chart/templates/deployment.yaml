@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "skyops.fullname" . }}
+  labels:
+    {{- include "skyops.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.agent.replicas }}
+  selector:
+    matchLabels:
+      {{- include "skyops.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "skyops.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "skyops.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: skyops-agent
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "-m", "app.agent.main"]
+          ports:
+            - name: http-health
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          env:
+            - name: SKYOPS_AGENT_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: SKYOPS_AGENT_PORT
+              value: {{ .Values.service.port | quote }}
+            - name: SKYOPS_SERVER_URL
+              value: {{ .Values.server.url | quote }}
+            - name: SKYOPS_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "skyops.secretName" . }}
+                  key: SKYOPS_AGENT_TOKEN
+                  optional: true
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "skyops.secretName" . }}
+                  key: GEMINI_API_KEY
+                  optional: true
+          resources:
+            {{- toYaml .Values.agent.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http-health
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http-health
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          volumeMounts:
+            - name: data-dir
+              mountPath: {{ .Values.persistence.mountPath | default "/app/data" }}
+      volumes:
+        - name: data-dir
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ if .Values.persistence.existingClaim }}{{ .Values.persistence.existingClaim }}{{ else }}{{ include "skyops.fullname" . }}-data{{ end }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.agent.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

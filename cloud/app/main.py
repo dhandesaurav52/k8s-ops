@@ -6,6 +6,8 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
+from fastapi.middleware.cors import CORSMiddleware
+from cloud.app.api.auth import router as auth_router
 from cloud.app.api.clusters import router as clusters_router
 from cloud.app.api.health import router as health_router
 from cloud.app.api.incidents import router as incidents_router
@@ -68,10 +70,36 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS Configuration
+allowed_origins = [o.strip() for o in settings.SKYOPS_ALLOWED_ORIGINS.split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins if allowed_origins else ["*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add security headers to every HTTP response."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled error handling request '{request.method} {request.url.path}': {exc}", exc_info=True)
+    err_msg = str(exc)
+    # Redact potential credentials in exception string
+    for secret in [settings.SKYOPS_AGENT_TOKEN, settings.SKYOPS_ADMIN_PASSWORD, settings.SKYOPS_SECRET_KEY]:
+        if secret and secret in err_msg:
+            err_msg = err_msg.replace(secret, "[REDACTED]")
+    logger.error(f"Unhandled error handling request '{request.method} {request.url.path}': {err_msg}")
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "An internal server error occurred. Please try again later."},
@@ -80,6 +108,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Register API routers
 app.include_router(health_router)
+app.include_router(auth_router)
 app.include_router(clusters_router)
 app.include_router(incidents_router)
 app.include_router(metrics_router)

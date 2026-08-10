@@ -2,11 +2,16 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from cloud.app.auth import get_current_identity
 from cloud.app.database import get_db
 from cloud.app.schemas.incident import IncidentCreate, IncidentResponse, IncidentUpdate
 from cloud.app.services.incident_service import IncidentService
 
-router = APIRouter(prefix="/api/v1/incidents", tags=["Incidents"])
+router = APIRouter(
+    prefix="/api/v1/incidents",
+    tags=["Incidents"],
+    dependencies=[Depends(get_current_identity)],
+)
 
 
 @router.get("", response_model=List[IncidentResponse], status_code=status.HTTP_200_OK)

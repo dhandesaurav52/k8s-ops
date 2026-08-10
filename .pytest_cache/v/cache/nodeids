@@ -69,5 +69,12 @@
   "tests/test_remediation.py::test_multi_cluster_isolation_precondition",
   "tests/test_remediation.py::test_remediation_plan_creation_and_dry_run",
   "tests/test_secret_safety.py::test_secret_safety_no_secret_values_in_investigation",
+  "tests/test_security.py::test_admin_login_and_session_auth",
+  "tests/test_security.py::test_protected_endpoints_reject_invalid_token",
+  "tests/test_security.py::test_protected_endpoints_reject_unauthenticated",
+  "tests/test_security.py::test_public_health_endpoint_accessible",
+  "tests/test_security.py::test_secret_redaction_in_global_exception_handler",
+  "tests/test_security.py::test_security_headers",
+  "tests/test_security.py::test_valid_agent_token_access",
   "tests/test_service_discovery.py::test_discover_all_services_targeting_pod"
 ]

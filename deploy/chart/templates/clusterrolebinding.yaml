@@ -1,0 +1,16 @@
+{{- if and .Values.rbac.create .Values.serviceAccount.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "skyops.fullname" . }}-binding
+  labels:
+    {{- include "skyops.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "skyops.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ include "skyops.fullname" . }}-role
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

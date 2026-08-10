@@ -2,11 +2,16 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from cloud.app.auth import get_current_identity
 from cloud.app.database import get_db
 from cloud.app.schemas.cluster import ClusterCreate, ClusterResponse, ClusterUpdate
 from cloud.app.services.cluster_service import ClusterService
 
-router = APIRouter(prefix="/api/v1/clusters", tags=["Clusters"])
+router = APIRouter(
+    prefix="/api/v1/clusters",
+    tags=["Clusters"],
+    dependencies=[Depends(get_current_identity)],
+)
 
 
 @router.get("", response_model=List[ClusterResponse], status_code=status.HTTP_200_OK)

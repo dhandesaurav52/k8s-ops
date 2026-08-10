@@ -1,0 +1,14 @@
+apiVersion: v2
+name: skyops
+description: Production-grade Helm chart for SkyOps Kubernetes Agent
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - skyops
+  - observability
+  - kubernetes
+  - agent
+  - remediation
+maintainers:
+  - name: SkyOps Team

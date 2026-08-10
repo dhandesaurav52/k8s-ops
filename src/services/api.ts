@@ -12,6 +12,35 @@ import {
 const API_BASE = (((import.meta as any).env?.VITE_SKYOPS_API_URL as string) || '').replace(/\/$/, '');
 
 class ApiService {
+  private authToken: string = (typeof localStorage !== 'undefined' && localStorage.getItem('skyops_token')) || 'skyops-agent-secret-token';
+
+  setAuthToken(token: string) {
+    this.authToken = token;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('skyops_token', token);
+    }
+  }
+
+  getAuthToken(): string {
+    return this.authToken;
+  }
+
+  async login(username: string, password: string) {
+    const res = await this.requestWithRetry(this.getUrl('/api/v1/auth/login'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!res.ok) {
+      throw new Error('Invalid credentials');
+    }
+    const data = await res.json();
+    if (data.token) {
+      this.setAuthToken(data.token);
+    }
+    return data;
+  }
+
   private getUrl(endpoint: string): string {
     return `${API_BASE}${endpoint}`;
   }
@@ -23,11 +52,16 @@ class ApiService {
     retries = 1
   ): Promise<Response> {
     let lastError: any;
+    const reqHeaders = new Headers(init.headers || {});
+    if (!reqHeaders.has('Authorization') && this.authToken) {
+      reqHeaders.set('Authorization', `Bearer ${this.authToken}`);
+    }
+
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
-        const res = await fetch(url, { ...init, signal: controller.signal });
+        const res = await fetch(url, { ...init, headers: reqHeaders, credentials: 'include', signal: controller.signal });
         clearTimeout(timer);
         return res;
       } catch (e: any) {
@@ -42,7 +76,7 @@ class ApiService {
       lastError?.message?.includes('timed out') ||
       lastError?.message?.includes('aborted')
     ) {
-      throw new Error('SkyOps Cloud API request timed out');
+      throw new Error('SkyOps Server request timed out');
     }
     throw lastError;
   }
@@ -81,8 +115,7 @@ class ApiService {
   }
 
   /**
-   * Fetch all registered Kubernetes clusters from SkyOps Cloud API.
-   * Throws an error if SkyOps Cloud backend is unreachable.
+   * Fetch all registered Kubernetes clusters from SkyOps Server API.
    */
   async fetchClusters(): Promise<ClusterInfo[]> {
     const res = await this.requestWithRetry(this.getUrl('/api/v1/clusters'), {
@@ -90,7 +123,8 @@ class ApiService {
     }, 12000, 1);
 
     if (!res.ok) {
-      throw new Error(`SkyOps API error: ${res.status} ${res.statusText}`);
+      const errText = await res.text().catch(() => '');
+      throw new Error(`SkyOps API error (${res.status}): ${errText || res.statusText}`);
     }
 
     const data = await res.json();
@@ -112,8 +146,34 @@ class ApiService {
   }
 
   /**
-   * Fetch incidents from SkyOps Cloud API with optional cluster and status filtering.
-   * Throws an error if SkyOps Cloud backend is unreachable.
+   * Fetch a single cluster by cluster_id.
+   */
+  async getCluster(clusterId: string): Promise<ClusterInfo | null> {
+    const res = await this.requestWithRetry(this.getUrl(`/api/v1/clusters/${encodeURIComponent(clusterId)}`), {
+      headers: { 'Accept': 'application/json' },
+    }, 12000, 1);
+
+    if (!res.ok) {
+      if (res.status === 404) return null;
+      throw new Error(`SkyOps API error (${res.status})`);
+    }
+
+    const c = await res.json();
+    return {
+      cluster_id: c.cluster_id || clusterId,
+      name: c.name || c.cluster_id,
+      status: c.status || 'CONNECTED',
+      kubernetes_version: c.kubernetes_version || 'v1.28.0',
+      node_count: c.node_count ?? 0,
+      pod_count: c.pod_count ?? 0,
+      namespace_count: c.namespace_count ?? 0,
+      agent_status: c.agent_status || 'HEALTHY',
+      last_heartbeat: c.updated_at || c.last_seen || new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Fetch incidents from SkyOps Server API with optional cluster and status filtering.
    */
   async fetchIncidents(clusterId?: string, status?: string): Promise<Incident[]> {
     let endpoint = '/api/v1/incidents';
@@ -127,7 +187,8 @@ class ApiService {
     }, 12000, 1);
 
     if (!res.ok) {
-      throw new Error(`SkyOps API error: ${res.status} ${res.statusText}`);
+      const errText = await res.text().catch(() => '');
+      throw new Error(`SkyOps API error (${res.status}): ${errText || res.statusText}`);
     }
 
     const data = await res.json();
@@ -166,8 +227,8 @@ class ApiService {
    * Retrieve a single incident by database ID or string incident_id.
    */
   async getIncident(incidentId: string, clusterId?: string): Promise<Incident | null> {
-    let endpoint = `/api/v1/incidents/${incidentId}`;
-    if (clusterId) endpoint += `?cluster_id=${clusterId}`;
+    let endpoint = `/api/v1/incidents/${encodeURIComponent(incidentId)}`;
+    if (clusterId && clusterId !== 'ALL') endpoint += `?cluster_id=${encodeURIComponent(clusterId)}`;
 
     const res = await this.requestWithRetry(this.getUrl(endpoint), {
       headers: { 'Accept': 'application/json' },
@@ -210,7 +271,7 @@ class ApiService {
    * Mark an incident as RESOLVED via the SkyOps Cloud Backend API.
    */
   async resolveIncident(incidentId: string): Promise<boolean> {
-    const res = await this.requestWithRetry(this.getUrl(`/api/v1/incidents/${incidentId}/resolve`), {
+    const res = await this.requestWithRetry(this.getUrl(`/api/v1/incidents/${encodeURIComponent(incidentId)}/resolve`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     }, 12000, 1);
@@ -478,7 +539,7 @@ class ApiService {
   }
 
   /**
-   * Fetch resource metrics summary for a specific cluster or default active cluster.
+   * Fetch resource metrics summary for a specific cluster.
    */
   async fetchMetricsSummary(clusterId?: string): Promise<ClusterMetricSummary> {
     let endpoint = '/api/v1/metrics';
@@ -502,7 +563,7 @@ class ApiService {
    */
   async fetchNodeMetrics(clusterId?: string): Promise<NodeMetric[]> {
     let endpoint = '/api/v1/metrics/nodes';
-    if (clusterId) {
+    if (clusterId && clusterId !== 'ALL') {
       endpoint += `?cluster_id=${encodeURIComponent(clusterId)}`;
     }
 
@@ -522,7 +583,7 @@ class ApiService {
    */
   async fetchPodMetrics(clusterId?: string): Promise<PodMetric[]> {
     let endpoint = '/api/v1/metrics/pods';
-    if (clusterId) {
+    if (clusterId && clusterId !== 'ALL') {
       endpoint += `?cluster_id=${encodeURIComponent(clusterId)}`;
     }
 
@@ -552,6 +613,134 @@ class ApiService {
 
     if (!res.ok) {
       throw new Error(`Metric History API error: ${res.status}`);
+    }
+
+    return await res.json();
+  }
+
+  /**
+   * List remediation plans.
+   */
+  async listRemediations(clusterId?: string, incidentId?: string): Promise<any[]> {
+    let endpoint = '/api/v1/remediations';
+    const params = new URLSearchParams();
+    if (clusterId && clusterId !== 'ALL') params.append('cluster_id', clusterId);
+    if (incidentId) params.append('incident_id', incidentId);
+    if (params.toString()) endpoint += `?${params.toString()}`;
+
+    const res = await this.requestWithRetry(this.getUrl(endpoint), {
+      headers: { Accept: 'application/json' },
+    }, 12000, 1);
+
+    if (!res.ok) {
+      throw new Error(`Remediations API error: ${res.status}`);
+    }
+
+    return await res.json();
+  }
+
+  /**
+   * Get specific remediation details.
+   */
+  async getRemediation(id: string): Promise<any> {
+    const res = await this.requestWithRetry(this.getUrl(`/api/v1/remediations/${encodeURIComponent(id)}`), {
+      headers: { Accept: 'application/json' },
+    }, 12000, 1);
+
+    if (!res.ok) {
+      if (res.status === 404) return null;
+      throw new Error(`Remediation API error: ${res.status}`);
+    }
+
+    return await res.json();
+  }
+
+  /**
+   * Trigger dry-run validation for a remediation plan.
+   */
+  async dryRunRemediation(id: string): Promise<any> {
+    const res = await this.requestWithRetry(this.getUrl(`/api/v1/remediations/${encodeURIComponent(id)}/dry-run`), {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    }, 12000, 1);
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Dry Run error (${res.status}): ${errText || res.statusText}`);
+    }
+
+    return await res.json();
+  }
+
+  /**
+   * Approve a remediation plan.
+   */
+  async approveRemediation(id: string, approvedBy = 'operator@skyops.internal'): Promise<any> {
+    const res = await this.requestWithRetry(this.getUrl(`/api/v1/remediations/${encodeURIComponent(id)}/approve`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ approved_by: approvedBy }),
+    }, 12000, 1);
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Approve error (${res.status}): ${errText || res.statusText}`);
+    }
+
+    return await res.json();
+  }
+
+  /**
+   * Reject a remediation plan.
+   */
+  async rejectRemediation(id: string, rejectedBy = 'operator@skyops.internal', reason = 'Rejected by operator'): Promise<any> {
+    const res = await this.requestWithRetry(this.getUrl(`/api/v1/remediations/${encodeURIComponent(id)}/reject`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ rejected_by: rejectedBy, reason }),
+    }, 12000, 1);
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Reject error (${res.status}): ${errText || res.statusText}`);
+    }
+
+    return await res.json();
+  }
+
+  /**
+   * Execute an approved remediation plan.
+   */
+  async executeRemediation(id: string): Promise<any> {
+    const res = await this.requestWithRetry(this.getUrl(`/api/v1/remediations/${encodeURIComponent(id)}/execute`), {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    }, 12000, 1);
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => null);
+      const detail = errJson?.detail || `HTTP ${res.status}`;
+      throw new Error(`Execute error: ${detail}`);
+    }
+
+    return await res.json();
+  }
+
+  /**
+   * Fetch audit records.
+   */
+  async fetchAuditRecords(clusterId?: string): Promise<any[]> {
+    let endpoint = '/api/v1/remediations/audit';
+    if (clusterId && clusterId !== 'ALL') {
+      endpoint += `?cluster_id=${encodeURIComponent(clusterId)}`;
+    }
+
+    const res = await this.requestWithRetry(this.getUrl(endpoint), {
+      headers: { Accept: 'application/json' },
+    }, 12000, 1);
+
+    if (!res.ok) {
+      return [];
     }
 
     return await res.json();

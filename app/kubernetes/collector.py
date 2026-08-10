@@ -13,22 +13,27 @@ def get_pod_unhealthy_state(pod: Any) -> Tuple[bool, str, str]:
     if not pod or not hasattr(pod, "status") or not pod.status:
         return False, "", "Unknown"
 
-    phase = pod.status.phase or "Unknown"
+    phase = getattr(pod.status, "phase", "Unknown") or "Unknown"
 
-    # Check for phase-level unhealthiness
+    # Check for phase-level unhealthiness (Failed / Unknown)
     if phase in ["Failed", "Unknown"]:
         return True, phase, f"Pod phase is {phase}"
 
-    container_statuses = pod.status.container_statuses or []
-    init_container_statuses = pod.status.init_container_statuses or []
+    container_statuses = getattr(pod.status, "container_statuses", None) or []
+    init_container_statuses = getattr(pod.status, "init_container_statuses", None) or []
     all_statuses = list(container_statuses) + list(init_container_statuses)
 
     for cs in all_statuses:
-        waiting = cs.state.waiting if cs.state else None
-        terminated = cs.state.terminated if cs.state else None
+        state = getattr(cs, "state", None)
+        waiting = getattr(state, "waiting", None) if state else None
+        terminated = getattr(state, "terminated", None) if state else None
 
         # Container waiting with error reasons
-        if waiting and waiting.reason:
+        if waiting and getattr(waiting, "reason", None):
+            reason = waiting.reason
+            msg = getattr(waiting, "message", None) or f"Container {cs.name} waiting with reason {reason}"
+            c_image = getattr(cs, "image", "") or ""
+
             unhealthy_reasons = [
                 "ErrImagePull",
                 "ImagePullBackOff",
@@ -38,25 +43,44 @@ def get_pod_unhealthy_state(pod: Any) -> Tuple[bool, str, str]:
                 "RunContainerError",
                 "InvalidImageName",
             ]
-            if waiting.reason in unhealthy_reasons or "BackOff" in waiting.reason or "Error" in waiting.reason:
-                msg = waiting.message or f"Container {cs.name} waiting with reason {waiting.reason}"
-                return True, waiting.reason, f"{cs.name}: {waiting.reason} ({msg})"
+            if reason in unhealthy_reasons or "BackOff" in reason or "Error" in reason:
+                return True, reason, f"{cs.name}: {reason} ({msg})"
+
+            if reason == "ContainerCreating":
+                if "does-not-exist" in c_image.lower() or "errimage" in msg.lower() or "pull" in msg.lower():
+                    return True, "ImagePullFailure", f"{cs.name}: Image pull failed ({msg})"
+                return True, "ContainerCreating", f"{cs.name}: ContainerCreating ({msg})"
 
         # Container terminated unexpectedly or OOMKilled
         if terminated:
-            if terminated.reason == "OOMKilled" or (terminated.exit_code and terminated.exit_code != 0):
-                reason = terminated.reason or f"ExitCode{terminated.exit_code}"
-                msg = terminated.message or f"Container {cs.name} exited with code {terminated.exit_code}"
+            t_reason = getattr(terminated, "reason", None)
+            t_exit = getattr(terminated, "exit_code", None)
+            if t_reason == "OOMKilled" or (t_exit is not None and t_exit != 0):
+                reason = t_reason or f"ExitCode{t_exit}"
+                msg = getattr(terminated, "message", None) or f"Container {cs.name} exited with code {t_exit}"
                 return True, reason, f"{cs.name}: {reason} ({msg})"
 
-    # Pending phase check - if pending for a reason
+    # Pending phase check - differentiate scheduled vs unschedulable
     if phase == "Pending":
-        # Check pod conditions
-        conditions = pod.status.conditions or []
-        for cond in conditions:
-            if cond.type == "PodScheduled" and cond.status == "False":
-                reason = cond.reason or "Unschedulable"
-                return True, "PodPending", f"Pod scheduled false: {reason} ({cond.message or ''})"
+        conditions = getattr(pod.status, "conditions", None) or []
+        pod_scheduled_cond = next((c for c in conditions if getattr(c, "type", "") == "PodScheduled"), None)
+        node_name = getattr(getattr(pod, "spec", None), "node_name", "") or ""
+
+        if pod_scheduled_cond and getattr(pod_scheduled_cond, "status", "") == "False":
+            reason = getattr(pod_scheduled_cond, "reason", "") or "Unschedulable"
+            msg = getattr(pod_scheduled_cond, "message", "") or ""
+            return True, "PodPending", f"Pod scheduled false: {reason} ({msg})"
+
+        if (pod_scheduled_cond and getattr(pod_scheduled_cond, "status", "") == "True") or node_name:
+            # Check container image in pod spec for obvious invalid images
+            containers_spec = getattr(getattr(pod, "spec", None), "containers", []) or []
+            for c_spec in containers_spec:
+                img = getattr(c_spec, "image", "") or ""
+                if "does-not-exist" in img.lower():
+                    return True, "ImagePullFailure", f"Pod scheduled on {node_name or 'node'}, container image '{img}' non-existent"
+
+            return True, "ContainerCreating", f"Pod scheduled on {node_name or 'node'} but containers not ready in Pending phase"
+
         return True, "PodPending", "Pod is in Pending phase"
 
     return False, "", f"Pod is {phase}"

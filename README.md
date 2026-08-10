@@ -36,22 +36,45 @@ SkyOps is an enterprise-grade, self-hosted, Jenkins-style Kubernetes Observabili
 
 ## 2. Installation Guide
 
-### Option A: Installing SkyOps Server (On Customer Server / VM)
+### Option A: Production Installation via Helm (Recommended)
 
-Run SkyOps Server via Docker Compose:
+SkyOps provides an official production-ready Helm chart located in `./deploy/chart`.
+
+#### Minimal Production Installation
 
 ```bash
-cd cloud
-docker compose up -d
+helm install skyops ./deploy/chart \
+  --namespace skyops \
+  --create-namespace \
+  --set server.url="https://skyops.example.com"
 ```
 
-Access the **SkyOps Web Console** at `http://<YOUR_SERVER_IP>:3000` (or `http://localhost:3000`).
+#### Secure Installation with Secrets (Token & Gemini API Key)
+
+```bash
+helm install skyops ./deploy/chart \
+  --namespace skyops \
+  --create-namespace \
+  --set server.url="https://skyops.example.com" \
+  --set agent.token="YOUR_SECURE_AGENT_TOKEN" \
+  --set gemini.apiKey="YOUR_GEMINI_API_KEY"
+```
+
+#### Installation with Custom Existing Kubernetes Secret
+
+If you manage secrets externally (e.g. HashiCorp Vault, ExternalSecrets), provide your secret name containing `SKYOPS_AGENT_TOKEN` and `GEMINI_API_KEY`:
+
+```bash
+helm install skyops ./deploy/chart \
+  --namespace skyops \
+  --create-namespace \
+  --set server.url="https://skyops.example.com" \
+  --set existingSecret="my-skyops-credentials"
+```
 
 ---
 
-### Option B: Installing SkyOps Agent (Inside Customer Kubernetes Cluster)
-
-Deploy the SkyOps Agent into your Kubernetes cluster using the official published image (`dhandesaurav52/skyops-agent:0.1.0`):
+### Option B: Plain Kubernetes Manifests
 
 ```bash
 # 1. Create skyops namespace
@@ -65,6 +88,82 @@ kubectl apply -f deploy/clusterrolebinding.yaml
 # 3. Deploy SkyOps Agent
 kubectl apply -f deploy/deployment.yaml
 ```
+
+---
+
+## 3. Helm Configuration Parameters
+
+The following table lists the main configurable parameters of the SkyOps chart and their default values:
+
+| Parameter | Description | Default |
+| :--- | :--- | :--- |
+| `server.url` | SkyOps Server API base URL | `"http://skyops-server.skyops.svc.cluster.local:8000"` |
+| `image.repository` | SkyOps Agent container image | `dhandesaurav52/skyops-agent` |
+| `image.tag` | SkyOps Agent container tag | `"0.1.0"` |
+| `image.pullPolicy` | Image pull policy | `IfNotPresent` |
+| `agent.token` | Authentication secret token for Agent-to-Server requests | `""` |
+| `gemini.apiKey` | Gemini API key for root cause diagnosis | `""` |
+| `existingSecret` | Name of existing secret containing credentials | `""` |
+| `agent.replicas` | Number of Agent pod replicas | `1` |
+| `agent.resources.requests` | Requested CPU / Memory resources | `100m` / `128Mi` |
+| `agent.resources.limits` | Limit CPU / Memory resources | `500m` / `512Mi` |
+| `persistence.enabled` | Persistent storage for agent outbox queue | `false` (`emptyDir`) |
+| `persistence.size` | Storage claim size if persistence is enabled | `1Gi` |
+| `rbac.create` | Create ClusterRole and ClusterRoleBinding | `true` |
+| `serviceAccount.create` | Create ServiceAccount for SkyOps | `true` |
+| `securityContext.readOnlyRootFilesystem` | Enforce read-only root filesystem | `true` |
+| `podSecurityContext.runAsNonRoot` | Run pod as non-root user (UID 10001) | `true` |
+
+---
+
+## 4. Chart Lifecycle Operations
+
+### Upgrading a Release
+
+To upgrade configuration or image version:
+
+```bash
+helm upgrade skyops ./deploy/chart \
+  --namespace skyops \
+  --set server.url="https://skyops.example.com"
+```
+
+### Rolling Back a Release
+
+If an upgrade encounters issues, rollback cleanly to the previous revision:
+
+```bash
+helm rollback skyops 1 --namespace skyops
+```
+
+### Uninstalling SkyOps
+
+To remove SkyOps agent resources from the cluster:
+
+```bash
+helm uninstall skyops --namespace skyops
+kubectl delete namespace skyops
+```
+
+---
+
+## 5. Troubleshooting & Diagnostics
+
+- **Check Release Status**:
+  ```bash
+  helm status skyops -n skyops
+  ```
+
+- **Verify Agent Pod Health & Probes**:
+  ```bash
+  kubectl get pods -n skyops -o wide
+  kubectl describe pod -l app.kubernetes.io/instance=skyops -n skyops
+  ```
+
+- **Stream Agent Telemetry Logs**:
+  ```bash
+  kubectl logs -n skyops -l app.kubernetes.io/instance=skyops -f
+  ```
 
 ---
 

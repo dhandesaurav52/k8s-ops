@@ -17,6 +17,16 @@ class Settings:
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
     API_PORT: int = int(os.getenv("API_PORT", "8000"))
+    
+    # Security & Auth Settings
+    SKYOPS_AGENT_TOKEN: str = os.getenv("SKYOPS_AGENT_TOKEN", "skyops-agent-secret-token")
+    SKYOPS_ADMIN_USERNAME: str = os.getenv("SKYOPS_ADMIN_USERNAME", "admin")
+    SKYOPS_ADMIN_PASSWORD: str = os.getenv("SKYOPS_ADMIN_PASSWORD", "skyops123")
+    SKYOPS_SECRET_KEY: str = os.getenv("SKYOPS_SECRET_KEY", "skyops-secret-key-change-in-production")
+    SKYOPS_ALLOWED_ORIGINS: str = os.getenv(
+        "SKYOPS_ALLOWED_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173",
+    )
 
 
 settings = Settings()

@@ -1,9 +1,14 @@
 from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from datetime import datetime, timezone
 import random
+from cloud.app.auth import get_current_identity
 
-router = APIRouter(prefix="/api/v1/remediations", tags=["Remediations"])
+router = APIRouter(
+    prefix="/api/v1/remediations",
+    tags=["Remediations"],
+    dependencies=[Depends(get_current_identity)],
+)
 
 # In-memory store for remediations and audit logs
 remediations_store: List[Dict[str, Any]] = [

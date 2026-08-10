@@ -170,12 +170,14 @@ class IncidentManager:
                     existing_incident.updated_at = utc_now_iso()
 
                     # Add to state history if state changed
-                    if not existing_incident.state_history or existing_incident.state_history[-1] != primary_reason:
+                    last_item = existing_incident.state_history[-1] if existing_incident.state_history else None
+                    last_st = last_item.get("state") if isinstance(last_item, dict) else (str(last_item) if last_item is not None else None)
+                    if not existing_incident.state_history or last_st != primary_reason:
                         existing_incident.state_history.append(primary_reason)
 
                     existing_incident.current_state = current_state
                     events = collect_pod_events(self.k8s_client, namespace, name, uid)
-                    diagnosis, recommendations = DiagnosisEngine.diagnose(primary_reason, current_state, events)
+                    diagnosis, recommendations = DiagnosisEngine.diagnose(primary_reason, current_state, events, pod_obj=pod)
                     existing_incident.evidence = events
                     existing_incident.diagnosis = diagnosis
                     existing_incident.recommendations = recommendations
@@ -211,7 +213,7 @@ class IncidentManager:
                 else:
                     # Create NEW Incident
                     events = collect_pod_events(self.k8s_client, namespace, name, uid)
-                    diagnosis, recommendations = DiagnosisEngine.diagnose(primary_reason, current_state, events)
+                    diagnosis, recommendations = DiagnosisEngine.diagnose(primary_reason, current_state, events, pod_obj=pod)
                     new_id = self.store.generate_next_id()
                     new_incident = Incident(
                         incident_id=new_id,
@@ -284,7 +286,9 @@ class IncidentManager:
                     open_inc.updated_at = now_str
                     open_inc.last_seen = now_str
                     open_inc.last_canonical_state = "RESOLVED"
-                    if not open_inc.state_history or open_inc.state_history[-1] != "Running":
+                    last_item = open_inc.state_history[-1] if open_inc.state_history else None
+                    last_st = last_item.get("state") if isinstance(last_item, dict) else (str(last_item) if last_item is not None else None)
+                    if not open_inc.state_history or last_st != "Running":
                         open_inc.state_history.append("Running")
 
                     self.store.save(open_inc)

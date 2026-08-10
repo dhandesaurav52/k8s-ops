@@ -1,10 +1,29 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, validator, root_validator
 
 
 VALID_SEVERITIES = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 VALID_STATUSES = {"OPEN", "RESOLVED"}
+
+
+def _normalize_history_list(v: Any) -> List[Dict[str, Any]]:
+    if not v:
+        return []
+    normalized = []
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for item in v:
+        if isinstance(item, str):
+            normalized.append({"state": item, "timestamp": now_iso, "reason": item})
+        elif isinstance(item, dict):
+            st = item.get("state") or item.get("reason") or "Unknown"
+            rs = item.get("reason") or item.get("state") or "Unknown"
+            ts = item.get("timestamp") or now_iso
+            normalized.append({"state": st, "timestamp": ts, "reason": rs})
+        else:
+            s = str(item)
+            normalized.append({"state": s, "timestamp": now_iso, "reason": s})
+    return normalized
 
 
 class ResourceSchema(BaseModel):
@@ -30,32 +49,35 @@ class IncidentCreate(BaseModel):
     diagnosis: Optional[Dict[str, Any]] = Field(default_factory=dict)
     investigation: Optional[Dict[str, Any]] = Field(default_factory=dict)
     ai_analysis: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    state_history: Optional[List[Union[str, Dict[str, Any]]]] = Field(default_factory=list)
+    state_history: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
 
-    @field_validator("severity")
-    @classmethod
+    @validator("state_history", pre=True, always=True)
+    def validate_state_history(cls, v):
+        return _normalize_history_list(v)
+
+    @validator("severity", always=True)
     def validate_severity(cls, v):
         if v and v.upper() not in VALID_SEVERITIES:
             raise ValueError(f"Invalid severity '{v}'. Must be one of {VALID_SEVERITIES}")
         return v.upper() if v else "MEDIUM"
 
-    @field_validator("status")
-    @classmethod
+    @validator("status", always=True)
     def validate_status(cls, v):
         if v and v.upper() not in VALID_STATUSES:
             raise ValueError(f"Invalid status '{v}'. Must be one of {VALID_STATUSES}")
         return v.upper() if v else "OPEN"
 
-    @model_validator(mode="after")
-    def populate_resource_fields(self):
-        if self.resource:
-            self.resource_kind = self.resource.kind
-            self.resource_namespace = self.resource.namespace
-            self.resource_name = self.resource.name
-            self.resource_uid = self.resource.uid
-        if not self.resource_name:
+    @root_validator(pre=False)
+    def populate_resource_fields(cls, values):
+        resource = values.get("resource")
+        if resource:
+            values["resource_kind"] = resource.kind
+            values["resource_namespace"] = resource.namespace
+            values["resource_name"] = resource.name
+            values["resource_uid"] = resource.uid
+        if not values.get("resource_name"):
             raise ValueError("resource_name or resource.name is required")
-        return self
+        return values
 
 
 class IncidentUpdate(BaseModel):
@@ -66,17 +88,21 @@ class IncidentUpdate(BaseModel):
     diagnosis: Optional[Dict[str, Any]] = None
     investigation: Optional[Dict[str, Any]] = None
     ai_analysis: Optional[Dict[str, Any]] = None
-    state_history: Optional[List[Union[str, Dict[str, Any]]]] = None
+    state_history: Optional[List[Dict[str, Any]]] = None
 
-    @field_validator("severity")
-    @classmethod
+    @validator("state_history", pre=True, always=True)
+    def validate_state_history(cls, v):
+        if v is None:
+            return None
+        return _normalize_history_list(v)
+
+    @validator("severity")
     def validate_severity(cls, v):
         if v and v.upper() not in VALID_SEVERITIES:
             raise ValueError(f"Invalid severity '{v}'. Must be one of {VALID_SEVERITIES}")
         return v.upper() if v else None
 
-    @field_validator("status")
-    @classmethod
+    @validator("status")
     def validate_status(cls, v):
         if v and v.upper() not in VALID_STATUSES:
             raise ValueError(f"Invalid status '{v}'. Must be one of {VALID_STATUSES}")
@@ -99,10 +125,15 @@ class IncidentResponse(BaseModel):
     diagnosis: Dict[str, Any]
     investigation: Dict[str, Any]
     ai_analysis: Dict[str, Any]
-    state_history: List[Union[str, Dict[str, Any]]] = Field(default_factory=list)
+    state_history: List[Dict[str, Any]] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
     resolved_at: Optional[datetime] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    @validator("state_history", pre=True, always=True)
+    def validate_state_history(cls, v):
+        return _normalize_history_list(v)
 
+    class Config:
+        orm_mode = True
+        from_attributes = True

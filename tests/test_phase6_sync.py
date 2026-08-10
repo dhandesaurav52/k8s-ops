@@ -151,6 +151,7 @@ class TestOutboxQueue:
 class TestCloudApiMultiClusterAndIdempotency:
     def test_cloud_upsert_and_idempotency(self):
         client = TestClient(cloud_app)
+        client.headers["Authorization"] = "Bearer skyops-agent-secret-token"
 
         # Register cluster
         reg_resp = client.post("/api/v1/clusters", json={
@@ -194,6 +195,7 @@ class TestCloudApiMultiClusterAndIdempotency:
 
     def test_multi_cluster_isolation(self):
         client = TestClient(cloud_app)
+        client.headers["Authorization"] = "Bearer skyops-agent-secret-token"
 
         # Same resource UID in cluster-A and cluster-B
         res_uid = "same-pod-uid-999"

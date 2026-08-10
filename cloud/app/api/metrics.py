@@ -1,9 +1,14 @@
 from typing import Dict, Any, Optional
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 import time
 from datetime import datetime, timezone
+from cloud.app.auth import get_current_identity
 
-router = APIRouter(prefix="/api/v1/metrics", tags=["Metrics"])
+router = APIRouter(
+    prefix="/api/v1/metrics",
+    tags=["Metrics"],
+    dependencies=[Depends(get_current_identity)],
+)
 
 # In-memory store for live metrics posted by agents
 metrics_cache: Dict[str, Dict[str, Any]] = {}
