@@ -12,6 +12,7 @@ os.environ["SKYOPS_ENV"] = "testing"
 import cloud.app.database as db_module
 import cloud.app.models  # Ensure all ORM models are registered on Base.metadata
 from cloud.app.database import Base, get_db
+from cloud.app.auth import get_current_identity
 from cloud.app.main import app
 
 
@@ -38,6 +39,7 @@ def setup_test_db():
             db.close()
 
     app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_identity] = lambda: {"type": "agent", "sub": "agent", "role": "agent"}
 
     yield
 

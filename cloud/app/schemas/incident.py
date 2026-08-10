@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, Field, validator, root_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 VALID_SEVERITIES = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
@@ -51,33 +51,39 @@ class IncidentCreate(BaseModel):
     ai_analysis: Optional[Dict[str, Any]] = Field(default_factory=dict)
     state_history: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
 
-    @validator("state_history", pre=True, always=True)
+    @field_validator("state_history", mode="before")
+    @classmethod
     def validate_state_history(cls, v):
         return _normalize_history_list(v)
 
-    @validator("severity", always=True)
+    @field_validator("severity", mode="before")
+    @classmethod
     def validate_severity(cls, v):
-        if v and v.upper() not in VALID_SEVERITIES:
+        if v and isinstance(v, str) and v.upper() not in VALID_SEVERITIES:
             raise ValueError(f"Invalid severity '{v}'. Must be one of {VALID_SEVERITIES}")
-        return v.upper() if v else "MEDIUM"
+        return v.upper() if isinstance(v, str) and v else "MEDIUM"
 
-    @validator("status", always=True)
+    @field_validator("status", mode="before")
+    @classmethod
     def validate_status(cls, v):
-        if v and v.upper() not in VALID_STATUSES:
+        if v and isinstance(v, str) and v.upper() not in VALID_STATUSES:
             raise ValueError(f"Invalid status '{v}'. Must be one of {VALID_STATUSES}")
-        return v.upper() if v else "OPEN"
+        return v.upper() if isinstance(v, str) and v else "OPEN"
 
-    @root_validator(pre=False)
-    def populate_resource_fields(cls, values):
-        resource = values.get("resource")
-        if resource:
-            values["resource_kind"] = resource.kind
-            values["resource_namespace"] = resource.namespace
-            values["resource_name"] = resource.name
-            values["resource_uid"] = resource.uid
-        if not values.get("resource_name"):
+    @model_validator(mode="after")
+    def populate_resource_fields(self) -> "IncidentCreate":
+        if self.resource:
+            if not self.resource_kind or self.resource_kind == "Pod":
+                self.resource_kind = self.resource.kind
+            if not self.resource_namespace or self.resource_namespace == "default":
+                self.resource_namespace = self.resource.namespace
+            if not self.resource_name:
+                self.resource_name = self.resource.name
+            if not self.resource_uid:
+                self.resource_uid = self.resource.uid
+        if not self.resource_name:
             raise ValueError("resource_name or resource.name is required")
-        return values
+        return self
 
 
 class IncidentUpdate(BaseModel):
@@ -90,23 +96,26 @@ class IncidentUpdate(BaseModel):
     ai_analysis: Optional[Dict[str, Any]] = None
     state_history: Optional[List[Dict[str, Any]]] = None
 
-    @validator("state_history", pre=True, always=True)
+    @field_validator("state_history", mode="before")
+    @classmethod
     def validate_state_history(cls, v):
         if v is None:
             return None
         return _normalize_history_list(v)
 
-    @validator("severity")
+    @field_validator("severity", mode="before")
+    @classmethod
     def validate_severity(cls, v):
-        if v and v.upper() not in VALID_SEVERITIES:
+        if v and isinstance(v, str) and v.upper() not in VALID_SEVERITIES:
             raise ValueError(f"Invalid severity '{v}'. Must be one of {VALID_SEVERITIES}")
-        return v.upper() if v else None
+        return v.upper() if isinstance(v, str) and v else None
 
-    @validator("status")
+    @field_validator("status", mode="before")
+    @classmethod
     def validate_status(cls, v):
-        if v and v.upper() not in VALID_STATUSES:
+        if v and isinstance(v, str) and v.upper() not in VALID_STATUSES:
             raise ValueError(f"Invalid status '{v}'. Must be one of {VALID_STATUSES}")
-        return v.upper() if v else None
+        return v.upper() if isinstance(v, str) and v else None
 
 
 class IncidentResponse(BaseModel):
@@ -130,10 +139,9 @@ class IncidentResponse(BaseModel):
     updated_at: datetime
     resolved_at: Optional[datetime] = None
 
-    @validator("state_history", pre=True, always=True)
+    @field_validator("state_history", mode="before")
+    @classmethod
     def validate_state_history(cls, v):
         return _normalize_history_list(v)
 
-    class Config:
-        orm_mode = True
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

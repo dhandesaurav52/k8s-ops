@@ -42,6 +42,7 @@
   "tests/test_deduplication.py::test_recovery_idempotency",
   "tests/test_diagnosis.py::test_crashloop_backoff_diagnosis",
   "tests/test_diagnosis.py::test_image_pull_backoff_diagnosis",
+  "tests/test_diagnosis.py::test_pod_pending_scheduled_does_not_diagnose_unschedulable",
   "tests/test_identity.py::test_different_resource_different_identity",
   "tests/test_identity.py::test_incident_identity_key_stability",
   "tests/test_investigation.py::test_controller_collector",
