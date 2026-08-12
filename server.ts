@@ -1,11 +1,46 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
+import { spawn } from 'child_process';
 import { createServer as createViteServer } from 'vite';
 
 const PORT = 3000;
-const FASTAPI_URL = (process.env.FASTAPI_URL || process.env.VITE_SKYOPS_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+const FASTAPI_PORT = process.env.API_PORT || '8001';
+const FASTAPI_URL = (process.env.FASTAPI_URL || process.env.VITE_SKYOPS_API_URL || `http://127.0.0.1:${FASTAPI_PORT}`).replace(/\/$/, '');
+
+let pythonProc: any = null;
+
+function ensureFastApiBackend() {
+  if (FASTAPI_URL.includes('127.0.0.1') || FASTAPI_URL.includes('localhost')) {
+    const env = {
+      ...process.env,
+      API_PORT: FASTAPI_PORT,
+      DATABASE_URL: process.env.DATABASE_URL || 'sqlite:///./data/cloud_db.sqlite',
+      PYTHONPATH: `${process.cwd()}:${process.env.PYTHONPATH || ''}`,
+    };
+
+    console.log(`[SkyOps UI] Launching FastAPI backend on port ${FASTAPI_PORT}...`);
+    pythonProc = spawn('python3', ['-m', 'uvicorn', 'cloud.app.main:app', '--host', '127.0.0.1', '--port', FASTAPI_PORT], {
+      env,
+      stdio: 'inherit',
+    });
+
+    pythonProc.on('error', (err: any) => {
+      console.error('[SkyOps UI] Failed to spawn FastAPI process:', err);
+    });
+
+    pythonProc.on('exit', (code: number, signal: string) => {
+      console.warn(`[SkyOps UI] FastAPI process exited with code ${code}, signal ${signal}`);
+    });
+
+    process.on('exit', () => {
+      if (pythonProc) pythonProc.kill();
+    });
+  }
+}
 
 async function startServer() {
+  ensureFastApiBackend();
+
   const app = express();
   app.use(express.json());
 

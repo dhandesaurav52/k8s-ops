@@ -11,12 +11,12 @@ else:
 
 class Settings:
     DATABASE_URL: str = os.getenv(
-        "DATABASE_URL", "postgresql://skyops:password@localhost:5432/skyops"
+        "DATABASE_URL", "sqlite:///./data/cloud_db.sqlite"
     )
     SKYOPS_ENV: str = os.getenv("SKYOPS_ENV", "development")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
-    API_PORT: int = int(os.getenv("API_PORT", "8000"))
+    API_PORT: int = int(os.getenv("API_PORT", "8001"))
     
     # Security & Auth Settings
     SKYOPS_AGENT_TOKEN: str = os.getenv("SKYOPS_AGENT_TOKEN", "skyops-agent-secret-token")

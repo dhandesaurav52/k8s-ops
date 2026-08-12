@@ -29,6 +29,7 @@ logger = logging.getLogger("SkyOps.Server.Backend")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing SkyOps Server Backend...")
+    os.makedirs("data", exist_ok=True)
     # Initialize database tables
     try:
         Base.metadata.create_all(bind=engine)

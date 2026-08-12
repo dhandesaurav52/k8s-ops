@@ -41,6 +41,15 @@ class ApiService {
     return data;
   }
 
+  private async safeJson<T = any>(res: Response): Promise<T> {
+    const text = await res.text();
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new Error(`Server returned non-JSON response (HTTP ${res.status}): ${text.slice(0, 120)}`);
+    }
+  }
+
   private getUrl(endpoint: string): string {
     return `${API_BASE}${endpoint}`;
   }
