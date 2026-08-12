@@ -22,7 +22,7 @@ agent:
     limits:
       cpu: 500m
       memory: 512Mi
-  token: "skyops-agent-secret-token"
+  token: ""
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -46,8 +46,9 @@ api:
     port: 8000
     nodePort: 30800
   adminUsername: "admin"
-  adminPassword: "skyops123"
-  secretKey: "skyops-secret-key-change-in-production"
+  adminPassword: ""
+  initialAdminPassword: ""
+  secretKey: ""
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -63,7 +64,7 @@ postgresql:
   auth:
     database: skyops
     username: skyops
-    password: "skyops-pg-password"
+    password: ""
   persistence:
     enabled: true
     mountPath: /var/lib/postgresql/data

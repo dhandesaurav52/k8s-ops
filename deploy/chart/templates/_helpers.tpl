@@ -91,12 +91,27 @@ PostgreSQL host helper
 {{- end }}
 
 {{/*
+PostgreSQL password helper
+*/}}
+{{- define "skyops.postgresPassword" -}}
+{{- if .Values.postgresql.auth.password -}}
+{{- .Values.postgresql.auth.password -}}
+{{- else -}}
+{{- $secretName := include "skyops.secretName" . -}}
+{{- $secret := (lookup "v1" "Secret" .Release.Namespace $secretName) -}}
+{{- if and $secret (hasKey $secret "data") (hasKey $secret.data "POSTGRES_PASSWORD") -}}
+{{- index $secret.data "POSTGRES_PASSWORD" | b64dec -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Database URL helper
 */}}
 {{- define "skyops.databaseUrl" -}}
 {{- if .Values.externalDatabase.url }}
 {{- .Values.externalDatabase.url }}
 {{- else }}
-{{- printf "postgresql://%s:%s@%s:5432/%s" .Values.postgresql.auth.username .Values.postgresql.auth.password (include "skyops.postgresql.host" .) .Values.postgresql.auth.database }}
+{{- printf "postgresql://%s:%s@%s:5432/%s" (default "skyops" .Values.postgresql.auth.username) (include "skyops.postgresPassword" .) (include "skyops.postgresql.host" .) (default "skyops" .Values.postgresql.auth.database) }}
 {{- end }}
 {{- end }}

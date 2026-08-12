@@ -32,8 +32,8 @@ spec:
           env:
             - name: DATABASE_URL
               valueFrom:
-                configMapKeyRef:
-                  name: {{ include "skyops.fullname" . }}-config
+                secretKeyRef:
+                  name: {{ include "skyops.secretName" . }}
                   key: DATABASE_URL
             - name: SKYOPS_ENV
               valueFrom:
