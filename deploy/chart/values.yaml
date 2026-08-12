@@ -4,6 +4,9 @@
 global:
   environment: "production"
 
+# Optional image pull secrets for private container registries
+imagePullSecrets: []
+
 # SkyOps Agent configuration
 agent:
   enabled: true

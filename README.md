@@ -50,26 +50,58 @@ Build production container images locally or in your CI pipeline:
 
 ```bash
 # 1. Build SkyOps API + Web UI Container Image
-docker build -t skyops/api:0.1.0 -f cloud/Dockerfile .
+docker build -t ghcr.io/your-org/skyops-api:0.1.0 -f cloud/Dockerfile .
 
 # 2. Build SkyOps Agent Container Image
-docker build -t skyops/agent:0.1.0 -f Dockerfile .
+docker build -t ghcr.io/your-org/skyops-agent:0.1.0 -f Dockerfile .
+
+# 3. Push to your Container Registry (GHCR, Docker Hub, ECR, GAR, etc.)
+docker push ghcr.io/your-org/skyops-api:0.1.0
+docker push ghcr.io/your-org/skyops-agent:0.1.0
 ```
 
-*Note: Both Dockerfiles utilize multi-stage builds and strict `.dockerignore` rules to ensure clean, lightweight images without `node_modules` pollution.*
+*Note: For local test clusters (e.g., `kind` or `k3s`), you can load images directly without pushing to a registry:*
+```bash
+kind load docker-image skyops/api:0.1.0 skyops/agent:0.1.0
+```
 
 ---
 
 ### Step 2: Install via Helm (One Command)
 
-Deploy the entire self-hosted platform with a single command:
+Deploy the entire self-hosted platform with custom repository tags and production credentials:
 
 ```bash
 helm install skyops ./deploy/chart \
-  --namespace skyops \
+  --namespace skyops-system \
   --create-namespace \
-  --set agent.token="YOUR_SECURE_AGENT_TOKEN" \
+  --set api.image.repository="ghcr.io/your-org/skyops-api" \
+  --set api.image.tag="0.1.0" \
+  --set agent.image.repository="ghcr.io/your-org/skyops-agent" \
+  --set agent.image.tag="0.1.0" \
+  --set agent.token="SECURE_RANDOM_AGENT_TOKEN" \
+  --set api.adminPassword="SECURE_ADMIN_PASSWORD" \
+  --set postgresql.auth.password="SECURE_PG_PASSWORD" \
   --set gemini.apiKey="YOUR_OPTIONAL_GEMINI_KEY"
+```
+
+#### Private Registry Setup (imagePullSecrets)
+If using a private registry that requires authentication:
+
+```bash
+# Create image pull secret in Kubernetes
+kubectl create secret docker-registry skyops-registry-secret \
+  --docker-server=ghcr.io \
+  --docker-username=YOUR_USERNAME \
+  --docker-password=YOUR_PAT_OR_TOKEN \
+  -n skyops-system
+
+# Install Helm chart with imagePullSecrets
+helm install skyops ./deploy/chart \
+  -n skyops-system \
+  --set "imagePullSecrets[0].name=skyops-registry-secret" \
+  --set api.image.repository="ghcr.io/your-org/skyops-api" \
+  --set agent.image.repository="ghcr.io/your-org/skyops-agent"
 ```
 
 ---
@@ -79,17 +111,15 @@ helm install skyops ./deploy/chart \
 Check the assigned service NodePort or port-forwarding details:
 
 ```bash
-# Get NodePort URL
-export NODE_PORT=$(kubectl get svc -n skyops skyops-api -o jsonpath='{.spec.ports[0].nodePort}')
-export NODE_IP=$(kubectl get nodes -n skyops -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+# Option A: Get NodePort URL (Production NodePort access)
+export NODE_PORT=$(kubectl get svc -n skyops-system skyops-api -o jsonpath='{.spec.ports[0].nodePort}')
+export NODE_IP=$(kubectl get nodes -n skyops-system -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 
-echo "SkyOps UI & API is accessible at: http://${NODE_IP}:${NODE_PORT}"
-```
+echo "SkyOps Web UI & API: http://${NODE_IP}:${NODE_PORT}"
 
-Or via kubectl port-forwarding:
-```bash
-kubectl port-forward -n skyops svc/skyops-api 8000:8000
-# Open http://localhost:8000 in your browser
+# Option B: kubectl port-forward (Local testing access)
+kubectl port-forward -n skyops-system svc/skyops-api 8000:8000
+echo "SkyOps Web UI & API: http://localhost:8000"
 ```
 
 ---
@@ -152,22 +182,32 @@ kubectl delete namespace skyops
 
 - **Check Pod Health**:
   ```bash
-  kubectl get pods -n skyops
+  kubectl get pods -n skyops-system
   ```
+
+- **Troubleshooting ImagePullBackOff / ErrImagePull**:
+  If pod status shows `ImagePullBackOff` or `ErrImagePull`, verify that:
+  1. The container images (`skyops/api:0.1.0` and `skyops/agent:0.1.0`) were pushed to a accessible container registry (e.g. GHCR, Docker Hub, ECR).
+  2. If using a local cluster (like `kind`), the images were loaded into the nodes using `kind load docker-image skyops/api:0.1.0 skyops/agent:0.1.0`.
+  3. If using a private registry, `imagePullSecrets` was properly set in Helm (`--set "imagePullSecrets[0].name=skyops-registry-secret"`).
+  4. Inspect pod details for specific registry pull errors:
+     ```bash
+     kubectl describe pod -l app.kubernetes.io/component=api -n skyops-system
+     ```
 
 - **Check API & Migration Logs**:
   ```bash
-  kubectl logs -n skyops -l app.kubernetes.io/component=api
+  kubectl logs -n skyops-system -l app.kubernetes.io/component=api
   ```
 
 - **Check Agent Telemetry**:
   ```bash
-  kubectl logs -n skyops -l app.kubernetes.io/component=agent -f
+  kubectl logs -n skyops-system -l app.kubernetes.io/component=agent -f
   ```
 
 - **Test Health Endpoint**:
   ```bash
-  curl -s http://localhost:8000/health
+  curl -s http://<NODE_IP>:<NODE_PORT>/health
   # Expected output: {"status":"healthy","database":"connected","timestamp":"..."}
   ```
 
