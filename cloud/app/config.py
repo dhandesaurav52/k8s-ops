@@ -20,6 +20,7 @@ class Settings:
     
     # Security & Auth Settings
     SKYOPS_AGENT_TOKEN: str = os.getenv("SKYOPS_AGENT_TOKEN", "skyops-agent-secret-token")
+    SKYOPS_INITIAL_ADMIN_PASSWORD: str = os.getenv("SKYOPS_INITIAL_ADMIN_PASSWORD", os.getenv("SKYOPS_ADMIN_PASSWORD", "skyops-initial-admin-password"))
     SKYOPS_ADMIN_USERNAME: str = os.getenv("SKYOPS_ADMIN_USERNAME", "admin")
     SKYOPS_ADMIN_PASSWORD: str = os.getenv("SKYOPS_ADMIN_PASSWORD", "skyops123")
     SKYOPS_SECRET_KEY: str = os.getenv("SKYOPS_SECRET_KEY", "skyops-secret-key-change-in-production")

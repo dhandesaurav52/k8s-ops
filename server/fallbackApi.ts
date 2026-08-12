@@ -302,6 +302,65 @@ fallbackRouter.get('/remediations/:id', (req: Request, res: Response) => {
   res.status(404).json({ detail: 'Remediation plan not found' });
 });
 
-fallbackRouter.post('/auth/login', (req: Request, res: Response) => {
-  res.json({ token: 'skyops-agent-secret-token', username: req.body?.username || 'admin' });
+let fallbackSetupCompleted = false;
+let fallbackUsers: Record<string, string> = {};
+
+fallbackRouter.get(['/auth/status', '/v1/auth/status'], (req: Request, res: Response) => {
+  res.json({
+    is_setup_completed: fallbackSetupCompleted,
+    authenticated: false,
+    user: null,
+  });
 });
+
+fallbackRouter.post(['/auth/verify-initial-password', '/v1/auth/verify-initial-password'], (req: Request, res: Response) => {
+  if (fallbackSetupCompleted) {
+    return res.status(400).json({ detail: "Initial setup has already been completed." });
+  }
+  const initPass = req.body?.initial_password;
+  if (initPass === "skyops123" || initPass === "skyops-initial-admin-password") {
+    return res.json({ status: "ok", message: "Initial password verified" });
+  }
+  return res.status(401).json({ detail: "Invalid initial administrator password." });
+});
+
+fallbackRouter.post(['/auth/setup-admin', '/v1/auth/setup-admin'], (req: Request, res: Response) => {
+  if (fallbackSetupCompleted) {
+    return res.status(400).json({ detail: "Initial setup has already been completed." });
+  }
+  const { initial_password, username, password } = req.body || {};
+  if (initial_password !== "skyops123" && initial_password !== "skyops-initial-admin-password") {
+    return res.status(401).json({ detail: "Invalid initial administrator password." });
+  }
+  if (!username || !password) {
+    return res.status(400).json({ detail: "Username and password required." });
+  }
+  fallbackUsers[username.toLowerCase()] = password;
+  fallbackSetupCompleted = true;
+  res.status(201).json({ status: "ok", message: "Administrator account created successfully." });
+});
+
+fallbackRouter.post(['/auth/login', '/v1/auth/login'], (req: Request, res: Response) => {
+  const { username, password } = req.body || {};
+  if (!fallbackSetupCompleted) {
+    return res.status(400).json({ detail: "Initial setup not completed." });
+  }
+  const storedPass = fallbackUsers[username?.toLowerCase()];
+  if (storedPass && storedPass === password) {
+    return res.json({
+      status: "ok",
+      user: { username, role: "admin" },
+      token: "skyops-session-token",
+    });
+  }
+  return res.status(401).json({ detail: "Invalid username or password." });
+});
+
+fallbackRouter.post(['/auth/logout', '/v1/auth/logout'], (req: Request, res: Response) => {
+  res.json({ status: "logged_out" });
+});
+
+fallbackRouter.get(['/auth/me', '/v1/auth/me'], (req: Request, res: Response) => {
+  res.json({ authenticated: true, identity: { sub: "admin", role: "admin" } });
+});
+

@@ -12,7 +12,9 @@ import { MetricsView } from './components/MetricsView';
 import { EventStreamConsole } from './components/EventStreamConsole';
 import { SettingsModal } from './components/SettingsModal';
 import { SimulateIncidentModal } from './components/SimulateIncidentModal';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { InitialSetupScreen } from './components/InitialSetupScreen';
+import { LoginScreen } from './components/LoginScreen';
+import { AlertTriangle, RefreshCw, Shield } from 'lucide-react';
 
 export default function App() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -28,6 +30,15 @@ export default function App() {
   const [isApiUnavailable, setIsApiUnavailable] = useState<boolean>(false);
   const [apiErrorMessage, setApiErrorMessage] = useState<string>('');
 
+  // Authentication & Setup state
+  const [authStatus, setAuthStatus] = useState<{
+    is_setup_completed: boolean;
+    authenticated: boolean;
+    user: { username: string; role: string; email?: string } | null;
+  } | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
+  const [loginSuccessMsg, setLoginSuccessMsg] = useState<string | null>(null);
+
   const [filters, setFilters] = useState<FilterOptions>({
     searchQuery: '',
     clusterId: 'ALL',
@@ -36,6 +47,27 @@ export default function App() {
     category: 'ALL',
     namespace: 'ALL',
   });
+
+  // Verify authentication and setup status
+  const checkAuth = async () => {
+    try {
+      const status = await apiService.getAuthStatus();
+      setAuthStatus(status);
+    } catch {
+      setAuthStatus({ is_setup_completed: false, authenticated: false, user: null });
+    } finally {
+      setIsCheckingAuth(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await apiService.logout();
+    await checkAuth();
+  };
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
 
   // Load live data from SkyOps Cloud API
   const loadData = async (silent = false) => {
@@ -70,6 +102,8 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!authStatus?.authenticated) return;
+
     loadData();
 
     // Check URL hash for direct deep links e.g. #incidents/INC-0842
@@ -101,7 +135,7 @@ export default function App() {
       window.removeEventListener('hashchange', handleHashChange);
       clearInterval(interval);
     };
-  }, [selectedClusterId]);
+  }, [selectedClusterId, authStatus?.authenticated]);
 
   // Handle cluster selection
   const handleSelectCluster = (clusterId: string) => {
@@ -160,6 +194,42 @@ export default function App() {
     (i) => i.status === 'OPEN' && i.severity === 'CRITICAL'
   ).length;
 
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100 font-sans">
+        <div className="w-12 h-12 bg-cyan-950 border border-cyan-800 rounded-xl flex items-center justify-center text-cyan-400 mb-4 animate-pulse">
+          <Shield className="w-6 h-6 text-cyan-400 animate-spin" />
+        </div>
+        <div className="text-sm font-semibold tracking-wider text-slate-300">
+          Initializing SkyOps Security Engine...
+        </div>
+      </div>
+    );
+  }
+
+  if (!authStatus?.is_setup_completed) {
+    return (
+      <InitialSetupScreen
+        onSetupComplete={async () => {
+          setLoginSuccessMsg('Setup complete! Please log in with your newly created administrator account.');
+          await checkAuth();
+        }}
+      />
+    );
+  }
+
+  if (!authStatus?.authenticated) {
+    return (
+      <LoginScreen
+        successMessage={loginSuccessMsg}
+        onLoginSuccess={async () => {
+          setLoginSuccessMsg(null);
+          await checkAuth();
+        }}
+      />
+    );
+  }
+
   return (
     <div
       className={`min-h-screen ${
@@ -180,6 +250,8 @@ export default function App() {
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         isMobileOpen={isMobileSidebarOpen}
         onToggleMobile={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+        currentUser={authStatus?.user}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Workspace (Offset by Sidebar width on large screens) */}

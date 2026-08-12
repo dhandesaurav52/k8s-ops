@@ -13,6 +13,8 @@ import {
   Menu,
   ShieldCheck,
   BarChart2,
+  User,
+  LogOut,
 } from 'lucide-react';
 import { NavTabType } from '../types';
 
@@ -25,6 +27,8 @@ interface SidebarProps {
   onOpenSettings: () => void;
   isMobileOpen: boolean;
   onToggleMobile: () => void;
+  currentUser?: { username: string; role: string; email?: string } | null;
+  onLogout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -36,6 +40,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSettings,
   isMobileOpen,
   onToggleMobile,
+  currentUser,
+  onLogout,
 }) => {
   const navItems = [
     {
@@ -213,6 +219,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <span className="text-[10px] text-neutral-500">v1.0</span>
           </button>
+
+          {/* User & Logout Badge */}
+          {currentUser && (
+            <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between px-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-7 h-7 rounded bg-cyan-950 border border-cyan-800/80 flex items-center justify-center text-cyan-400 shrink-0 text-xs font-bold">
+                  {currentUser.username[0].toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-neutral-200 truncate">
+                    {currentUser.username}
+                  </div>
+                  <div className="text-[10px] text-cyan-400/80 font-mono capitalize">
+                    {currentUser.role}
+                  </div>
+                </div>
+              </div>
+
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="p-1.5 text-neutral-400 hover:text-rose-400 hover:bg-rose-950/40 rounded border border-transparent hover:border-rose-800/50 transition"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </aside>
     </>

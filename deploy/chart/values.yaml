@@ -11,9 +11,9 @@ imagePullSecrets: []
 agent:
   enabled: true
   image:
-    repository: skyops/agent
+    repository: dhandesaurav52/skyops-agent
     pullPolicy: IfNotPresent
-    tag: "0.1.0"
+    tag: "1.0.0"
   replicas: 1
   resources:
     requests:
@@ -30,9 +30,9 @@ agent:
 # SkyOps API & Web UI Server configuration
 api:
   image:
-    repository: skyops/api
+    repository: dhandesaurav52/skyops-api
     pullPolicy: IfNotPresent
-    tag: "0.1.0"
+    tag: "1.0.0"
   replicas: 1
   resources:
     requests:

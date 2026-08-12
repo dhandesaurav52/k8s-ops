@@ -55,6 +55,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "skyops.secretName" . }}
                   key: SKYOPS_ADMIN_PASSWORD
+            - name: SKYOPS_INITIAL_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "skyops.secretName" . }}
+                  key: SKYOPS_INITIAL_ADMIN_PASSWORD
             - name: SKYOPS_SECRET_KEY
               valueFrom:
                 secretKeyRef:

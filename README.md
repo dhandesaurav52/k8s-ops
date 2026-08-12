@@ -1,10 +1,16 @@
-# SkyOps — Self-Hosted Kubernetes Operations Platform
+# SkyOps — Self-Hosted Kubernetes Operations Platform (v1.0.0)
 
 SkyOps is an enterprise-grade, self-hosted Kubernetes Observability, Root Cause Analysis & Safe Automated Remediation Platform. The customer owns the server, Web UI, API, database, and telemetry data in a self-contained Kubernetes deployment.
 
 ---
 
-## 1. Target Architecture
+## 1. Executive Overview & Product Definition
+
+SkyOps operates entirely inside your Kubernetes cluster. It continuously watches workload events (e.g., `CrashLoopBackOff`, `ImagePullBackOff`, `OOMKilled`, container crashes), correlates events into structured incident records, analyzes root causes with optional Gemini AI assistance, and presents operator-driven remediation controls via an intuitive Web UI.
+
+---
+
+## 2. Target Architecture
 
 ```text
                   SELF-HOSTED KUBERNETES CLUSTER / INFRASTRUCTURE
@@ -17,7 +23,7 @@ SkyOps is an enterprise-grade, self-hosted Kubernetes Observability, Root Cause 
        │  └───────────▲────────────┘       └──────────────────────────┘  │
        │              │                                                  │
        │              │ HTTP REST + Auth Token                           │
-       │              │                                                  │
+       │              │ (http://skyops-api:8000)                         │
        │  ┌───────────┴────────────┐                                     │
        │  │      SkyOps Agent      │                                     │
        │  │    (Cluster Watcher)   │                                     │
@@ -30,229 +36,146 @@ SkyOps is an enterprise-grade, self-hosted Kubernetes Observability, Root Cause 
 
 ---
 
-## 2. Self-Hosted Installation (Single Helm Command)
+## 3. Customer & System Requirements
 
-SkyOps provides a complete, unified Helm chart (`./deploy/chart`) that provisions:
-1. **PostgreSQL Database**: Persistent state storage for incidents, metrics, and audit logs.
-2. **SkyOps API & Web UI Server**: Unified FastAPI backend and compiled React SPA static UI.
-3. **SkyOps Agent**: Cluster event watcher, diagnostic engine, and safe remediation executor with full RBAC permissions.
+### Customer Requirements (What is Needed)
+- **Supported Kubernetes Cluster**: v1.24+ (EKS, GKE, AKS, OpenShift, RKE2, K3s, Kind, Minikube).
+- **Tools**: `kubectl`, `helm` (v3+), cluster-admin permissions to create namespaces and RBAC resources.
+- **Network Access**: Outbound access to pull container images from Docker Hub or your private registry.
 
-### Prerequisites
-- Kubernetes cluster (v1.24+)
-- `helm` (v3+)
-- `kubectl` configured with cluster admin permissions
+### What is NOT Required on Customer Servers / Workstations
+- **No Node.js / npm**
+- **No Python / pip**
+- **No Docker Desktop**
+- **No Git**
+- **No host-level compilation or development runtime**
 
----
-
-### Step 1: Build & Push Docker Images
-
-Build production container images locally or in your CI pipeline:
-
-```bash
-# 1. Build SkyOps API + Web UI Container Image
-docker build -t ghcr.io/your-org/skyops-api:0.1.0 -f cloud/Dockerfile .
-
-# 2. Build SkyOps Agent Container Image
-docker build -t ghcr.io/your-org/skyops-agent:0.1.0 -f Dockerfile .
-
-# 3. Push to your Container Registry (GHCR, Docker Hub, ECR, GAR, etc.)
-docker push ghcr.io/your-org/skyops-api:0.1.0
-docker push ghcr.io/your-org/skyops-agent:0.1.0
-```
-
-*Note: For local test clusters (e.g., `kind` or `k3s`), you can load images directly without pushing to a registry:*
-```bash
-kind load docker-image skyops/api:0.1.0 skyops/agent:0.1.0
-```
+### Minimum Resource Requirements
+- **SkyOps API & Web UI**: 100m CPU request / 500m limit, 256Mi RAM request / 1Gi limit.
+- **SkyOps Agent**: 100m CPU request / 500m limit, 128Mi RAM request / 512Mi limit.
+- **PostgreSQL Database**: 100m CPU request / 500m limit, 256Mi RAM request / 512Mi limit, 5Gi PVC (ReadWriteOnce).
 
 ---
 
-### Step 2: Install via Helm (One Command)
+## 4. Self-Hosted Installation (Single Helm Command)
 
-Deploy the entire self-hosted platform with custom repository tags and production credentials:
+### Step 1: Add or Update Helm Chart Repository / Local Path
 
 ```bash
+# Add SkyOps Helm repository (or use local ./deploy/chart directory)
 helm install skyops ./deploy/chart \
   --namespace skyops-system \
   --create-namespace \
-  --set api.image.repository="ghcr.io/your-org/skyops-api" \
-  --set api.image.tag="0.1.0" \
-  --set agent.image.repository="ghcr.io/your-org/skyops-agent" \
-  --set agent.image.tag="0.1.0" \
+  --set api.image.repository="dhandesaurav52/skyops-api" \
+  --set api.image.tag="1.0.0" \
+  --set agent.image.repository="dhandesaurav52/skyops-agent" \
+  --set agent.image.tag="1.0.0" \
   --set agent.token="SECURE_RANDOM_AGENT_TOKEN" \
   --set api.adminPassword="SECURE_ADMIN_PASSWORD" \
-  --set postgresql.auth.password="SECURE_PG_PASSWORD" \
-  --set gemini.apiKey="YOUR_OPTIONAL_GEMINI_KEY"
+  --set postgresql.auth.password="SECURE_PG_PASSWORD"
 ```
 
-#### Private Registry Setup (imagePullSecrets)
-If using a private registry that requires authentication:
+### Step 2: Retrieve Initial Administrator Password & Complete Setup
 
+When SkyOps is installed for the first time, an initial administrator password is automatically generated and saved in a Kubernetes Secret (similar to Jenkins).
+
+1. **Retrieve the Initial Administrator Password using `kubectl`**:
 ```bash
-# Create image pull secret in Kubernetes
-kubectl create secret docker-registry skyops-registry-secret \
-  --docker-server=ghcr.io \
-  --docker-username=YOUR_USERNAME \
-  --docker-password=YOUR_PAT_OR_TOKEN \
-  -n skyops-system
-
-# Install Helm chart with imagePullSecrets
-helm install skyops ./deploy/chart \
-  -n skyops-system \
-  --set "imagePullSecrets[0].name=skyops-registry-secret" \
-  --set api.image.repository="ghcr.io/your-org/skyops-api" \
-  --set agent.image.repository="ghcr.io/your-org/skyops-agent"
+kubectl get secret skyops-secrets -n skyops-system -o jsonpath="{.data.initial-admin-password}" | base64 --decode
 ```
+
+2. **First-Run Initial Setup**:
+   - Open the SkyOps Web UI in your browser (`http://${NODE_IP}:${NODE_PORT}`).
+   - The **Initial Setup** wizard will prompt for the initial administrator password retrieved from the Kubernetes Secret.
+   - Enter the initial password to unlock account creation.
+   - Create your personal administrator credentials (username/email and password).
+   - Once setup is completed, the **initial administrator password is automatically invalidated and disabled**.
+   - Log in using your newly created administrator credentials to access the SkyOps Operations Console.
 
 ---
 
-### Step 3: Access the Web UI & API
+## 5. Security & Authentication Model
 
-Check the assigned service NodePort or port-forwarding details:
+SkyOps V1 uses a simple, secure Jenkins-style local administrator authentication architecture:
 
-```bash
-# Option A: Get NodePort URL (Production NodePort access)
-export NODE_PORT=$(kubectl get svc -n skyops-system skyops-api -o jsonpath='{.spec.ports[0].nodePort}')
-export NODE_IP=$(kubectl get nodes -n skyops-system -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-
-echo "SkyOps Web UI & API: http://${NODE_IP}:${NODE_PORT}"
-
-# Option B: kubectl port-forward (Local testing access)
-kubectl port-forward -n skyops-system svc/skyops-api 8000:8000
-echo "SkyOps Web UI & API: http://localhost:8000"
-```
+- **Jenkins-style Bootstrap**: Fresh installations generate an initial password stored securely in `skyops-secrets` (`initial-admin-password`).
+- **One-Time Setup Flow**: The initial password unlocks a 2-step setup wizard where the operator creates their administrator account with strong PBKDF2 password hashing. Once created, initial password authorization is permanently disabled.
+- **Session Security**: Authenticated sessions issue HMAC-SHA256 tokens stored in HttpOnly, SameSite cookies.
+- **Distinct Agent Auth**: SkyOps Agent authentication (`SKYOPS_AGENT_TOKEN`) remains completely separate from human operator credentials. Human administrator passwords are never shared with or used by cluster agents.
+- **401 Enforcement**: All API routes (`/api/v1/clusters`, `/api/v1/incidents`, `/api/v1/remediations`, `/api/v1/metrics`) strictly enforce HTTP 401 Unauthorized responses for unauthenticated requests.
 
 ---
 
-## 3. Helm Chart Configuration Parameters
+## 5. Configuration Parameters (Helm `values.yaml`)
 
 | Parameter | Description | Default |
 | :--- | :--- | :--- |
-| `global.environment` | Deployment environment name | `"production"` |
-| `agent.enabled` | Deploy SkyOps Agent pod | `true` |
-| `agent.image.repository` | SkyOps Agent container image | `skyops/agent` |
-| `agent.image.tag` | SkyOps Agent image tag | `"0.1.0"` |
-| `agent.token` | Authentication secret token for Agent-to-Server requests | `"skyops-agent-secret-token"` |
-| `api.image.repository` | SkyOps API + Web UI container image | `skyops/api` |
-| `api.image.tag` | SkyOps API image tag | `"0.1.0"` |
-| `api.service.type` | Kubernetes Service type for Web UI & API | `NodePort` |
-| `api.service.port` | API Service port | `8000` |
-| `api.service.nodePort` | Static NodePort for external browser access | `30800` |
-| `api.adminUsername` | Admin UI login username | `"admin"` |
-| `api.adminPassword` | Admin UI login password | `"skyops123"` |
-| `postgresql.enabled` | Deploy self-hosted PostgreSQL database | `true` |
+| `global.environment` | Deployment environment | `"production"` |
+| `agent.enabled` | Deploy SkyOps Agent | `true` |
+| `agent.image.repository` | SkyOps Agent container image | `dhandesaurav52/skyops-agent` |
+| `agent.image.tag` | Agent image tag | `"1.0.0"` |
+| `agent.token` | Authentication token for Agent-to-API communication | `"skyops-agent-secret-token"` |
+| `api.image.repository` | SkyOps API + Web UI image | `dhandesaurav52/skyops-api` |
+| `api.image.tag` | API image tag | `"1.0.0"` |
+| `api.service.type` | Kubernetes Service type (`NodePort`, `LoadBalancer`, `ClusterIP`) | `NodePort` |
+| `api.service.port` | Internal API port | `8000` |
+| `api.service.nodePort` | External NodePort | `30800` |
+| `api.adminUsername` | Admin username | `"admin"` |
+| `api.adminPassword` | Admin password | `"skyops123"` |
+| `postgresql.enabled` | Enable internal PostgreSQL deployment | `true` |
 | `postgresql.auth.database` | Database name | `"skyops"` |
 | `postgresql.auth.username` | Database username | `"skyops"` |
 | `postgresql.auth.password` | Database password | `"skyops-pg-password"` |
-| `postgresql.persistence.enabled` | Enable persistent volume claim for PostgreSQL | `true` |
-| `postgresql.persistence.size` | Storage size for database PVC | `5Gi` |
-| `rbac.create` | Create ClusterRole and ClusterRoleBinding | `true` |
-| `serviceAccount.create` | Create ServiceAccount for Agent | `true` |
-| `existingSecret` | Name of pre-created secret containing credentials | `""` |
+| `postgresql.persistence.enabled` | Enable persistent storage for database | `true` |
+| `postgresql.persistence.size` | Storage volume size | `5Gi` |
+| `rbac.create` | Create ClusterRole and ClusterRoleBinding for Agent | `true` |
+| `ingress.enabled` | Enable Ingress controller routing | `false` |
 
 ---
 
-## 4. Operational Lifecycle Commands
+## 6. Operations Lifecycle
 
-### Upgrading Configuration or Images
-
+### Upgrading
 ```bash
 helm upgrade skyops ./deploy/chart \
-  --namespace skyops \
-  --set api.image.tag="0.1.1" \
-  --set agent.image.tag="0.1.1"
+  --namespace skyops-system \
+  --set api.image.tag="1.0.1" \
+  --set agent.image.tag="1.0.1"
 ```
 
-### Rolling Back a Release
-
+### Rolling Back
 ```bash
-helm rollback skyops 1 --namespace skyops
+helm rollback skyops 1 --namespace skyops-system
 ```
 
-### Uninstalling SkyOps
-
+### Uninstalling
 ```bash
-helm uninstall skyops --namespace skyops
-kubectl delete namespace skyops
+helm uninstall skyops --namespace skyops-system
+kubectl delete namespace skyops-system
 ```
 
 ---
 
-## 5. Troubleshooting & Health Verification
-
-- **Check Pod Health**:
-  ```bash
-  kubectl get pods -n skyops-system
-  ```
-
-- **Troubleshooting ImagePullBackOff / ErrImagePull**:
-  If pod status shows `ImagePullBackOff` or `ErrImagePull`, verify that:
-  1. The container images (`skyops/api:0.1.0` and `skyops/agent:0.1.0`) were pushed to a accessible container registry (e.g. GHCR, Docker Hub, ECR).
-  2. If using a local cluster (like `kind`), the images were loaded into the nodes using `kind load docker-image skyops/api:0.1.0 skyops/agent:0.1.0`.
-  3. If using a private registry, `imagePullSecrets` was properly set in Helm (`--set "imagePullSecrets[0].name=skyops-registry-secret"`).
-  4. Inspect pod details for specific registry pull errors:
-     ```bash
-     kubectl describe pod -l app.kubernetes.io/component=api -n skyops-system
-     ```
-
-- **Check API & Migration Logs**:
-  ```bash
-  kubectl logs -n skyops-system -l app.kubernetes.io/component=api
-  ```
-
-- **Check Agent Telemetry**:
-  ```bash
-  kubectl logs -n skyops-system -l app.kubernetes.io/component=agent -f
-  ```
-
-- **Test Health Endpoint**:
-  ```bash
-  curl -s http://<NODE_IP>:<NODE_PORT>/health
-  # Expected output: {"status":"healthy","database":"connected","timestamp":"..."}
-  ```
+## 7. Security & Compliance
+- **Least Privilege RBAC**: Agent uses targeted read permissions for pods/events and scoped patch rights for deployments/statefulsets.
+- **Zero SaaS Dependencies**: 100% self-hosted inside customer-controlled infrastructure.
+- **Internal Database Security**: PostgreSQL service is `ClusterIP` only and never exposed externally.
+- **Secret Redaction**: Automatic stripping of auth tokens, passwords, and sensitive keys in API logging and exception handlers.
 
 ---
 
-## 6. Incident & Remediation Lifecycle Workflow
-
-```text
-DETECTED ──► INVESTIGATED ──► AI DIAGNOSIS ──► DRY RUN VALIDATION ──► HUMAN APPROVAL ──► SAFE EXECUTION ──► VERIFICATION ──► RESOLVED
-```
-
-1. **Detection**: Agent captures pod/workload failure events (`OOMKilled`, `CrashLoopBackOff`, `ImagePullBackOff`).
-2. **Investigation**: Agent gathers pod status, events, controller spec, node state, and container logs without leaking secrets.
-3. **AI Diagnosis**: Gemini AI or diagnostic engine analyzes evidence to determine exact root cause and actionable fix.
-4. **Dry Run**: Validates policy compliance and target resource existence without mutating cluster state.
-5. **Human Approval**: Operator reviews proposed command and grants approval.
-6. **Execution**: Safe execution of allowlisted Kubernetes actions (`RESOURCE_ADJUSTMENT`, `ROLLOUT_RESTART`, `SCALE_WORKLOAD`, `ROLLBACK_WORKLOAD`).
-7. **Verification**: Verifies target workload reaches healthy ready state before resolving incident.
-8. **Audit Trail**: Every action is immutably recorded in the database audit log.
-
----
-
-## 7. Verification & Automated Testing
-
-Run the full test suite locally:
-
+## 8. Release Process for SkyOps v1.0.0
+To build and release v1.0.0:
 ```bash
-# Core Agent & Remediation Tests
-python3 -m pytest --import-mode=prepend -v tests/
+# 1. Build and Tag Images
+docker build -t dhandesaurav52/skyops-api:1.0.0 -f cloud/Dockerfile .
+docker build -t dhandesaurav52/skyops-agent:1.0.0 -f Dockerfile .
 
-# Server Backend & Database API Tests
-python3 -m pytest --import-mode=prepend -v cloud/tests/
+# 2. Push Images to Docker Hub
+docker push dhandesaurav52/skyops-api:1.0.0
+docker push dhandesaurav52/skyops-agent:1.0.0
 
-# Frontend Type Check & Linter
-npm run lint
-
-# Production Build Test
-npm run build
+# 3. Test Helm Lint & Render
+helm lint deploy/chart
+helm template skyops deploy/chart --namespace skyops-system
 ```
-
----
-
-## 8. Security & Privacy
-
-- **Zero SaaS Dependency**: 100% self-hosted on your own infrastructure.
-- **RBAC Security**: Agent operates under explicit, least-privilege RBAC rules.
-- **Secret Redaction**: Automatic redaction of environment variables, passwords, and auth tokens.
-- **Human-in-the-Loop**: Destructive shell execution is strictly prohibited; state mutation requires human operator approval.

@@ -40,6 +40,46 @@ class ApiService {
     return this.authToken;
   }
 
+  async getAuthStatus(): Promise<{ is_setup_completed: boolean; authenticated: boolean; user: { username: string; role: string; email?: string } | null }> {
+    try {
+      const res = await this.requestWithRetry(this.getUrl('/api/v1/auth/status'), {
+        headers: { Accept: 'application/json' },
+      }, 5000, 1);
+      if (!res.ok) {
+        return { is_setup_completed: false, authenticated: false, user: null };
+      }
+      return await this.safeJson(res);
+    } catch {
+      return { is_setup_completed: false, authenticated: false, user: null };
+    }
+  }
+
+  async verifyInitialPassword(initialPassword: string): Promise<{ status: string; message: string }> {
+    const res = await this.requestWithRetry(this.getUrl('/api/v1/auth/verify-initial-password'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initial_password: initialPassword }),
+    });
+    if (!res.ok) {
+      const err = await this.safeJson<{ detail?: string }>(res).catch(() => ({ detail: 'Invalid initial password' }));
+      throw new Error(err.detail || 'Invalid initial administrator password');
+    }
+    return await this.safeJson(res);
+  }
+
+  async setupAdmin(data: { initial_password: string; username: string; email?: string; password: string }): Promise<{ status: string; message: string }> {
+    const res = await this.requestWithRetry(this.getUrl('/api/v1/auth/setup-admin'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await this.safeJson<{ detail?: string }>(res).catch(() => ({ detail: 'Setup failed' }));
+      throw new Error(err.detail || 'Failed to complete initial administrator setup');
+    }
+    return await this.safeJson(res);
+  }
+
   async login(username: string, password: string) {
     const res = await this.requestWithRetry(this.getUrl('/api/v1/auth/login'), {
       method: 'POST',
@@ -47,13 +87,26 @@ class ApiService {
       body: JSON.stringify({ username, password }),
     });
     if (!res.ok) {
-      throw new Error('Invalid credentials');
+      const err = await this.safeJson<{ detail?: string }>(res).catch(() => ({ detail: 'Invalid credentials' }));
+      throw new Error(err.detail || 'Invalid username or password');
     }
     const data = await this.safeJson<any>(res);
     if (data.token) {
       this.setAuthToken(data.token);
     }
     return data;
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await this.requestWithRetry(this.getUrl('/api/v1/auth/logout'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch {
+      // ignore
+    }
+    this.setAuthToken('');
   }
 
   private async safeJson<T = any>(res: Response): Promise<T> {
