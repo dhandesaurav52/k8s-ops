@@ -11,13 +11,28 @@ import {
 
 const API_BASE = (((import.meta as any).env?.VITE_SKYOPS_API_URL as string) || '').replace(/\/$/, '');
 
+const getStoredToken = (): string => {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem('skyops_token') || 'skyops-agent-secret-token';
+    }
+  } catch {
+    // Ignore restricted storage contexts
+  }
+  return 'skyops-agent-secret-token';
+};
+
 class ApiService {
-  private authToken: string = (typeof localStorage !== 'undefined' && localStorage.getItem('skyops_token')) || 'skyops-agent-secret-token';
+  private authToken: string = getStoredToken();
 
   setAuthToken(token: string) {
     this.authToken = token;
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('skyops_token', token);
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('skyops_token', token);
+      }
+    } catch {
+      // Ignore storage restrictions
     }
   }
 
@@ -208,11 +223,11 @@ class ApiService {
       throw new Error('Invalid response format for incidents');
     }
 
-    return data.map((item: any) => ({
-      id: item.id,
-      cluster_id: item.cluster_id,
-      incident_id: item.incident_id,
-      category: item.category,
+    return data.filter(Boolean).map((item: any) => ({
+      id: item.id || 0,
+      cluster_id: item.cluster_id || 'unknown',
+      incident_id: item.incident_id || `INC-${item.id || '000'}`,
+      category: item.category || 'UNKNOWN',
       status: (item.status || 'OPEN') as IncidentStatus,
       current_state: item.current_state || '',
       severity: (item.severity || 'MEDIUM') as SeverityLevel,
@@ -224,14 +239,14 @@ class ApiService {
         kind: item.resource_kind || item.resource?.kind || 'Pod',
         namespace: item.resource_namespace || item.resource?.namespace || 'default',
         name: item.resource_name || item.resource?.name || 'unknown',
-        uid: item.resource_uid || item.resource?.uid || `uid-${item.incident_id}`,
+        uid: item.resource_uid || item.resource?.uid || `uid-${item.incident_id || '000'}`,
         labels: item.resource?.labels || {},
         owner_references: item.resource?.owner_references || [],
       },
-      diagnosis: item.diagnosis || {},
-      investigation: item.investigation || {},
-      ai_analysis: item.ai_analysis || {},
-      state_history: item.state_history || [],
+      diagnosis: typeof item.diagnosis === 'object' && item.diagnosis !== null ? item.diagnosis : {},
+      investigation: typeof item.investigation === 'object' && item.investigation !== null ? item.investigation : {},
+      ai_analysis: typeof item.ai_analysis === 'object' && item.ai_analysis !== null ? item.ai_analysis : {},
+      state_history: Array.isArray(item.state_history) ? item.state_history : [],
     }));
   }
 
@@ -253,10 +268,10 @@ class ApiService {
 
     const item = await this.safeJson<any>(res);
     return {
-      id: item.id,
-      cluster_id: item.cluster_id,
-      incident_id: item.incident_id,
-      category: item.category,
+      id: item.id || 0,
+      cluster_id: item.cluster_id || 'unknown',
+      incident_id: item.incident_id || `INC-${item.id || '000'}`,
+      category: item.category || 'UNKNOWN',
       status: (item.status || 'OPEN') as IncidentStatus,
       current_state: item.current_state || '',
       severity: (item.severity || 'MEDIUM') as SeverityLevel,
@@ -268,14 +283,14 @@ class ApiService {
         kind: item.resource_kind || item.resource?.kind || 'Pod',
         namespace: item.resource_namespace || item.resource?.namespace || 'default',
         name: item.resource_name || item.resource?.name || 'unknown',
-        uid: item.resource_uid || item.resource?.uid || `uid-${item.incident_id}`,
+        uid: item.resource_uid || item.resource?.uid || `uid-${item.incident_id || '000'}`,
         labels: item.resource?.labels || {},
         owner_references: item.resource?.owner_references || [],
       },
-      diagnosis: item.diagnosis || {},
-      investigation: item.investigation || {},
-      ai_analysis: item.ai_analysis || {},
-      state_history: item.state_history || [],
+      diagnosis: typeof item.diagnosis === 'object' && item.diagnosis !== null ? item.diagnosis : {},
+      investigation: typeof item.investigation === 'object' && item.investigation !== null ? item.investigation : {},
+      ai_analysis: typeof item.ai_analysis === 'object' && item.ai_analysis !== null ? item.ai_analysis : {},
+      state_history: Array.isArray(item.state_history) ? item.state_history : [],
     };
   }
 

@@ -61,7 +61,11 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   const healthyAgents = scopedClusters.filter((c) => c.agent_status === 'HEALTHY' || c.agent_status === 'LOCAL_DEV').length;
 
   const recentIncidents = [...scopedIncidents]
-    .sort((a, b) => new Date(b.last_seen).getTime() - new Date(a.last_seen).getTime())
+    .sort((a, b) => {
+      const timeA = a.last_seen ? new Date(a.last_seen).getTime() : 0;
+      const timeB = b.last_seen ? new Date(b.last_seen).getTime() : 0;
+      return timeB - timeA;
+    })
     .slice(0, 5);
 
   const formatRelativeTime = (isoString: string) => {

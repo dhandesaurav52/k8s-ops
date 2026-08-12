@@ -48,7 +48,7 @@ export const NodesView: React.FC<NodesViewProps> = ({
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return (
-        node.name.toLowerCase().includes(q) ||
+        (node.name || '').toLowerCase().includes(q) ||
         (node.cluster_id && node.cluster_id.toLowerCase().includes(q))
       );
     }

@@ -75,12 +75,12 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
 
     if (filters.searchQuery) {
       const q = filters.searchQuery.toLowerCase();
-      const matchId = inc.incident_id.toLowerCase().includes(q);
-      const matchRes = inc.resource?.name?.toLowerCase().includes(q);
-      const matchNs = inc.resource?.namespace?.toLowerCase().includes(q);
-      const matchCat = inc.category.toLowerCase().includes(q);
-      const matchState = inc.current_state.toLowerCase().includes(q);
-      const matchCluster = inc.cluster_id.toLowerCase().includes(q);
+      const matchId = (inc.incident_id || '').toLowerCase().includes(q);
+      const matchRes = (inc.resource?.name || '').toLowerCase().includes(q);
+      const matchNs = (inc.resource?.namespace || '').toLowerCase().includes(q);
+      const matchCat = (inc.category || '').toLowerCase().includes(q);
+      const matchState = (inc.current_state || '').toLowerCase().includes(q);
+      const matchCluster = (inc.cluster_id || '').toLowerCase().includes(q);
       if (!matchId && !matchRes && !matchNs && !matchCat && !matchState && !matchCluster)
         return false;
     }
@@ -91,16 +91,18 @@ export const IncidentsTable: React.FC<IncidentsTableProps> = ({
   const sortedIncidents = [...filteredIncidents].sort((a, b) => {
     let comparison = 0;
     if (sortField === 'last_seen') {
-      comparison = new Date(b.last_seen).getTime() - new Date(a.last_seen).getTime();
+      const timeA = a.last_seen ? new Date(a.last_seen).getTime() : 0;
+      const timeB = b.last_seen ? new Date(b.last_seen).getTime() : 0;
+      comparison = timeB - timeA;
     } else if (sortField === 'severity') {
       const rank = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
       comparison = (rank[b.severity] || 0) - (rank[a.severity] || 0);
     } else if (sortField === 'incident_id') {
-      comparison = a.incident_id.localeCompare(b.incident_id);
+      comparison = (a.incident_id || '').localeCompare(b.incident_id || '');
     } else if (sortField === 'resource_name') {
       comparison = (a.resource?.name || '').localeCompare(b.resource?.name || '');
     } else if (sortField === 'category') {
-      comparison = a.category.localeCompare(b.category);
+      comparison = (a.category || '').localeCompare(b.category || '');
     }
 
     return sortAsc ? -comparison : comparison;
