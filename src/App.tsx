@@ -208,10 +208,10 @@ export default function App() {
             <div className="flex items-center space-x-2.5">
               <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 animate-pulse" />
               <span className="font-bold text-red-100 uppercase tracking-wider">
-                SkyOps Cloud unavailable
+                SkyOps API unavailable
               </span>
               <span className="text-red-300 border-l border-red-800/60 pl-2.5">
-                {apiErrorMessage || 'Could not establish connection to live Cloud telemetry service'}
+                {apiErrorMessage || 'Could not establish connection to live SkyOps API service'}
               </span>
             </div>
             <button

@@ -142,3 +142,38 @@ def test_incident_invalid_payload_validation(client):
     }
     resp_2 = client.post("/api/v1/incidents", json=missing_cat)
     assert resp_2.status_code == 422
+
+
+def test_create_incident_with_null_json_fields_and_long_state(client):
+    # Agent payload without AI key (ai_analysis: None, diagnosis: None, long current_state)
+    payload = {
+        "cluster_id": "skyops-cluster-prod",
+        "incident_id": "INC-8888",
+        "resource": {
+            "kind": "Pod",
+            "namespace": "production",
+            "name": "large-log-pod-0",
+            "uid": "uid-log-pod-8888",
+        },
+        "category": "CrashLoopBackOff",
+        "status": "OPEN",
+        "current_state": "A" * 500,  # Long state message > 100 chars
+        "severity": "HIGH",
+        "occurrences": 1,
+        "diagnosis": None,
+        "investigation": None,
+        "ai_analysis": None,
+        "state_history": None,
+    }
+
+    resp = client.post("/api/v1/incidents", json=payload)
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["cluster_id"] == "skyops-cluster-prod"
+    assert data["incident_id"] == "INC-8888"
+    assert data["diagnosis"] == {}
+    assert data["investigation"] == {}
+    assert data["ai_analysis"] == {}
+    assert data["state_history"] == []
+    assert len(data["current_state"]) == 500
+

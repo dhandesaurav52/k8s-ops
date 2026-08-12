@@ -123,7 +123,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             />
             <span className={isCloudConnected ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
-              {isCloudConnected ? 'CLOUD CONNECTED' : 'CLOUD OFFLINE'}
+              {isCloudConnected ? 'API CONNECTED' : 'API OFFLINE'}
             </span>
           </div>
         </div>

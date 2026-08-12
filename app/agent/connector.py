@@ -69,7 +69,7 @@ class CloudConnector(ClusterConnector):
     ):
         raw_url = cloud_url or os.getenv("SKYOPS_SERVER_URL") or os.getenv("SKYOPS_CLOUD_URL", "http://localhost:8000")
         self.cloud_url = raw_url.rstrip("/")
-        self.agent_token = agent_token or os.getenv("SKYOPS_AGENT_TOKEN", "")
+        self.agent_token = agent_token or os.getenv("SKYOPS_AGENT_TOKEN", "skyops-agent-secret-token")
         self.timeout = timeout
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
@@ -105,19 +105,19 @@ class CloudConnector(ClusterConnector):
         success, _ = self._post("/api/v1/clusters", payload)
         if success:
             self.registered = True
-            logger.info(f"Successfully registered cluster '{payload['cluster_id']}' with SkyOps Cloud.")
+            logger.info(f"Successfully registered cluster '{payload['cluster_id']}' with SkyOps API.")
         else:
-            logger.warning(f"Failed to register cluster '{payload['cluster_id']}' with SkyOps Cloud.")
+            logger.warning(f"Failed to register cluster '{payload['cluster_id']}' with SkyOps API.")
         return success
 
     def send_incident(self, incident: Any) -> bool:
-        """Send or update an incident on SkyOps Cloud."""
+        """Send or update an incident on SkyOps API."""
         success, _ = self.send_incident_status(incident)
         return success
 
     def send_incident_status(self, incident: Any) -> tuple[bool, bool]:
         """
-        Send or update an incident on SkyOps Cloud.
+        Send or update an incident on SkyOps API.
         Returns a tuple: (success: bool, is_fatal: bool).
         """
         if isinstance(incident, dict):
@@ -154,9 +154,9 @@ class CloudConnector(ClusterConnector):
         inc_id = payload.get("incident_id", "INC-UNKNOWN")
         success, is_fatal = self._post("/api/v1/incidents", payload)
         if success:
-            logger.info(f"Successfully synchronized incident '{inc_id}' to SkyOps Cloud.")
+            logger.info(f"Successfully synchronized incident '{inc_id}' to SkyOps API.")
         else:
-            logger.warning(f"Failed to synchronize incident '{inc_id}' to SkyOps Cloud (fatal={is_fatal}).")
+            logger.warning(f"Failed to synchronize incident '{inc_id}' to SkyOps API (fatal={is_fatal}).")
         return success, is_fatal
 
     def _post(self, endpoint: str, data: Dict[str, Any]) -> tuple[bool, bool]:
@@ -180,7 +180,7 @@ class CloudConnector(ClusterConnector):
                 if response.status_code in (401, 403):
                     # Authentication / authorization failures fail fast, do not retry forever
                     logger.error(
-                        f"Authentication failed ({response.status_code}) posting to SkyOps Cloud at {url}. "
+                        f"Authentication failed ({response.status_code}) posting to SkyOps API at {url}. "
                         "Please verify SKYOPS_AGENT_TOKEN."
                     )
                     return False, True
@@ -188,7 +188,7 @@ class CloudConnector(ClusterConnector):
                 if response.status_code in (400, 422):
                     # Validation / client error, fail fast
                     logger.error(
-                        self._redact(f"Client error ({response.status_code}) posting to SkyOps Cloud: {response.text}")
+                        self._redact(f"Client error ({response.status_code}) posting to SkyOps API: {response.text}")
                     )
                     return False, True
 
@@ -196,14 +196,14 @@ class CloudConnector(ClusterConnector):
                 logger.warning(
                     self._redact(
                         f"Attempt {attempt}/{self.max_retries}: Transient HTTP {response.status_code} "
-                        f"from SkyOps Cloud at {url}. Retrying..."
+                        f"from SkyOps API at {url}. Retrying..."
                     )
                 )
 
             except Exception as e:
                 err_str = self._redact(str(e))
                 logger.warning(
-                    f"Attempt {attempt}/{self.max_retries}: Connection error to SkyOps Cloud at {url}: {err_str}"
+                    f"Attempt {attempt}/{self.max_retries}: Connection error to SkyOps API at {url}: {err_str}"
                 )
 
             if attempt < self.max_retries:

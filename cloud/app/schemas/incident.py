@@ -51,6 +51,15 @@ class IncidentCreate(BaseModel):
     ai_analysis: Optional[Dict[str, Any]] = Field(default_factory=dict)
     state_history: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
 
+    @field_validator("diagnosis", "investigation", "ai_analysis", mode="before")
+    @classmethod
+    def validate_dict_fields(cls, v):
+        if v is None:
+            return {}
+        if isinstance(v, dict):
+            return v
+        return {}
+
     @field_validator("state_history", mode="before")
     @classmethod
     def validate_state_history(cls, v):
@@ -122,22 +131,38 @@ class IncidentResponse(BaseModel):
     id: int
     cluster_id: str
     incident_id: str
-    resource_kind: str
-    resource_namespace: str
+    resource_kind: str = "Pod"
+    resource_namespace: str = "default"
     resource_name: str
-    resource_uid: str
+    resource_uid: str = ""
     category: str
-    status: str
-    current_state: str
-    severity: str
-    occurrences: int
-    diagnosis: Dict[str, Any]
-    investigation: Dict[str, Any]
-    ai_analysis: Dict[str, Any]
+    status: str = "OPEN"
+    current_state: str = ""
+    severity: str = "MEDIUM"
+    occurrences: int = 1
+    diagnosis: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    investigation: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    ai_analysis: Optional[Dict[str, Any]] = Field(default_factory=dict)
     state_history: List[Dict[str, Any]] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
     resolved_at: Optional[datetime] = None
+
+    @field_validator("diagnosis", "investigation", "ai_analysis", mode="before")
+    @classmethod
+    def validate_dict_fields(cls, v):
+        if v is None:
+            return {}
+        if isinstance(v, dict):
+            return v
+        return {}
+
+    @field_validator("resource_kind", "resource_namespace", "resource_uid", "current_state", "severity", "status", mode="before")
+    @classmethod
+    def validate_str_fields(cls, v):
+        if v is None:
+            return ""
+        return str(v)
 
     @field_validator("state_history", mode="before")
     @classmethod

@@ -48,7 +48,7 @@ def upgrade() -> None:
         sa.Column('resource_uid', sa.String(length=100), nullable=False, server_default=''),
         sa.Column('category', sa.String(length=100), nullable=False),
         sa.Column('status', sa.String(length=20), nullable=False, server_default='OPEN'),
-        sa.Column('current_state', sa.String(length=100), nullable=False, server_default=''),
+        sa.Column('current_state', sa.Text(), nullable=False, server_default=''),
         sa.Column('severity', sa.String(length=20), nullable=False, server_default='MEDIUM'),
         sa.Column('occurrences', sa.Integer(), nullable=False, server_default='1'),
         sa.Column('diagnosis', sa.JSON(), nullable=False),
