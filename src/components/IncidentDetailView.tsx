@@ -43,6 +43,24 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
   onResolve,
   onReanalyze,
 }) => {
+  const formatDisplayValue = (value: unknown): string => {
+    if (value === null || value === undefined) return '-';
+
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      return String(value);
+    }
+
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  };
+
   const [copiedText, setCopiedText] = useState<string | null>(null);
   const [showRawJson, setShowRawJson] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'evidence' | 'graph'>('overview');
@@ -589,12 +607,37 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
               </div>
               <div className="space-y-2 relative before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-neutral-800">
                 {(incident.state_history || ['Pending', incident.current_state]).map(
-                  (st: string, idx: number) => (
+                  (st: any, idx: number) => (
                     <div key={idx} className="flex items-center gap-3 relative pl-6">
                       <div className="w-2 h-2 rounded-full bg-cyan-400 border border-neutral-900 absolute left-1" />
                       <div className="p-1.5 bg-neutral-950 border border-neutral-800 rounded text-neutral-300 w-full flex items-center justify-between text-[11px]">
-                        <span>{st}</span>
-                        <span className="text-[10px] text-neutral-500">Step #{idx + 1}</span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-bold">
+                            {formatDisplayValue(
+                              typeof st === 'object' && st !== null
+                                ? st.state ?? st.status ?? st.value
+                                : st
+                            )}
+                          </span>
+
+                          {typeof st === 'object' && st !== null && st.reason && (
+                            <span className="text-[10px] text-neutral-500">
+                              {formatDisplayValue(st.reason)}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-[10px] text-neutral-500">
+                            Step #{idx + 1}
+                          </span>
+
+                          {typeof st === 'object' && st !== null && st.timestamp && (
+                            <span className="text-[10px] text-neutral-600">
+                              {new Date(st.timestamp).toLocaleTimeString()}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )
@@ -700,7 +743,7 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                             {cs.state_type}
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-amber-400 font-bold">{cs.reason || cs.message || '-'}</td>
+                        <td className="py-2 px-3 text-amber-400 font-bold">{formatDisplayValue(cs.reason ?? cs.message)}</td>
                         <td className="py-2 px-3 text-center font-bold text-neutral-200">{cs.restart_count}</td>
                         <td className="py-2 px-3 text-center text-red-400 font-mono font-bold">
                           {cs.exit_code ? cs.exit_code : '-'}
@@ -743,7 +786,7 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                       >
                         {evt.type}
                       </span>
-                      <span className="font-bold text-neutral-200">{evt.reason}</span>
+                      <span className="font-bold text-neutral-200">{formatDisplayValue(evt.reason)}</span>
                       <span className="text-neutral-400 text-xs">{evt.message}</span>
                     </div>
                     <div className="text-[10px] text-neutral-500 font-mono shrink-0">
