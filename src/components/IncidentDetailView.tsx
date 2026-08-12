@@ -196,7 +196,7 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
           }`}
         >
           <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-          <span>AI DIAGNOSIS & REMEDIATION</span>
+          <span>DIAGNOSIS & REMEDIATION</span>
         </button>
 
         <button
@@ -303,7 +303,7 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
               {aiAnalysis.detailed_explanation && (
                 <div className="space-y-1 pt-1">
                   <div className="text-[10px] text-neutral-500 uppercase tracking-wider font-bold">
-                    SRE AI DEEP REASONING EXPLANATION
+                    SRE DEEP DIAGNOSIS EXPLANATION
                   </div>
                   <div className="p-3 bg-neutral-950/60 border border-neutral-800/80 rounded text-neutral-400 leading-relaxed text-xs">
                     {aiAnalysis.detailed_explanation}

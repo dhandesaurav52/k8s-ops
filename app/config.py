@@ -21,6 +21,7 @@ CLUSTER_ID_FILE = DATA_DIR / "cluster_id.txt"
 MASK_SECRET_KEYS = True
 
 # AI Reasoning Engine Configuration
+ENABLE_AI_INTEGRATION = False  # Set to True when AI features are needed
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", None)
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 AI_MAX_RETRIES = int(os.getenv("SKYOPS_AI_MAX_RETRIES", "2"))

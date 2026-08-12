@@ -63,7 +63,7 @@ export const SimulateIncidentModal: React.FC<SimulateIncidentModalProps> = ({
         </div>
 
         <p className="text-neutral-400 text-xs">
-          Select a real-world Kubernetes failure mode to inject into the SkyOps incident detection and AI reasoning engine:
+          Select a real-world Kubernetes failure mode to inject into the SkyOps incident detection engine:
         </p>
 
         <div className="space-y-2">

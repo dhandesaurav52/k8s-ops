@@ -1,6 +1,7 @@
 import logging
 from typing import Any, Dict, Optional
 
+from app.config import ENABLE_AI_INTEGRATION
 from app.incidents.models import Incident, utc_now_iso
 from app.ai.gemini import GeminiProvider
 from app.ai.models import AIAnalysisResponse
@@ -24,9 +25,13 @@ class AIAnalyzer:
         """
         Intelligent triggering:
         Returns True if AI analysis should be executed for this incident:
-        1. Never analyzed before (ai_analysis is None or ai_status in ['NOT_ANALYZED', 'FAILED'])
-        2. Significant state progression (state_history length changed since last analysis)
+        1. AI integration is explicitly enabled
+        2. Never analyzed before (ai_analysis is None or ai_status in ['NOT_ANALYZED', 'FAILED'])
+        3. Significant state progression (state_history length changed since last analysis)
         """
+        if not ENABLE_AI_INTEGRATION:
+            return False
+
         if not incident.ai_analysis or incident.ai_status in ("NOT_ANALYZED", "FAILED", "FAILED_TO_PARSE"):
             return True
 

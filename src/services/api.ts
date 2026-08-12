@@ -136,7 +136,7 @@ class ApiService {
       throw new Error(`SkyOps API error (${res.status}): ${errText || res.statusText}`);
     }
 
-    const data = await res.json();
+    const data = await this.safeJson<any>(res);
     if (!Array.isArray(data)) {
       throw new Error('Invalid response format for clusters');
     }
@@ -167,7 +167,7 @@ class ApiService {
       throw new Error(`SkyOps API error (${res.status})`);
     }
 
-    const c = await res.json();
+    const c = await this.safeJson<any>(res);
     return {
       cluster_id: c.cluster_id || clusterId,
       name: c.name || c.cluster_id,
@@ -200,7 +200,7 @@ class ApiService {
       throw new Error(`SkyOps API error (${res.status}): ${errText || res.statusText}`);
     }
 
-    const data = await res.json();
+    const data = await this.safeJson<any>(res);
     if (!Array.isArray(data)) {
       throw new Error('Invalid response format for incidents');
     }
@@ -248,7 +248,7 @@ class ApiService {
       throw new Error(`SkyOps API error: ${res.status}`);
     }
 
-    const item = await res.json();
+    const item = await this.safeJson<any>(res);
     return {
       id: item.id,
       cluster_id: item.cluster_id,
@@ -521,7 +521,7 @@ class ApiService {
       throw new Error(`Failed to inject simulation incident: HTTP ${res.status}`);
     }
 
-    const item = await res.json();
+    const item = await this.safeJson<any>(res);
     return {
       id: item.id,
       cluster_id: item.cluster_id,
@@ -645,7 +645,7 @@ class ApiService {
       throw new Error(`Remediations API error: ${res.status}`);
     }
 
-    return await res.json();
+    return await this.safeJson<any[]>(res);
   }
 
   /**
@@ -661,7 +661,7 @@ class ApiService {
       throw new Error(`Remediation API error: ${res.status}`);
     }
 
-    return await res.json();
+    return await this.safeJson<any>(res);
   }
 
   /**
@@ -678,7 +678,7 @@ class ApiService {
       throw new Error(`Dry Run error (${res.status}): ${errText || res.statusText}`);
     }
 
-    return await res.json();
+    return await this.safeJson<any>(res);
   }
 
   /**
@@ -696,7 +696,7 @@ class ApiService {
       throw new Error(`Approve error (${res.status}): ${errText || res.statusText}`);
     }
 
-    return await res.json();
+    return await this.safeJson<any>(res);
   }
 
   /**
@@ -714,7 +714,7 @@ class ApiService {
       throw new Error(`Reject error (${res.status}): ${errText || res.statusText}`);
     }
 
-    return await res.json();
+    return await this.safeJson<any>(res);
   }
 
   /**
@@ -727,12 +727,12 @@ class ApiService {
     }, 12000, 1);
 
     if (!res.ok) {
-      const errJson = await res.json().catch(() => null);
+      const errJson = await this.safeJson<any>(res).catch(() => null);
       const detail = errJson?.detail || `HTTP ${res.status}`;
       throw new Error(`Execute error: ${detail}`);
     }
 
-    return await res.json();
+    return await this.safeJson<any>(res);
   }
 
   /**
@@ -752,7 +752,7 @@ class ApiService {
       return [];
     }
 
-    return await res.json();
+    return await this.safeJson<any[]>(res);
   }
 }
 

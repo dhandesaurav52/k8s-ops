@@ -156,8 +156,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <span className="text-neutral-200 font-semibold">FastAPI + Async Outbox Worker</span>
             </div>
             <div className="flex justify-between text-neutral-400">
-              <span>AI Diagnosis:</span>
-              <span className="text-purple-400 font-semibold">Server-side Gemini 2.5 Flash</span>
+              <span>Engine Diagnosis:</span>
+              <span className="text-purple-400 font-semibold">Rule-based / Deterministic</span>
             </div>
           </div>
         </div>

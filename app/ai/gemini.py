@@ -8,6 +8,7 @@ from app.config import (
     AI_INPUT_COST_PER_MILLION_TOKENS,
     AI_MAX_RETRIES,
     AI_OUTPUT_COST_PER_MILLION_TOKENS,
+    ENABLE_AI_INTEGRATION,
     GEMINI_API_KEY,
     GEMINI_MODEL,
 )
@@ -57,6 +58,8 @@ class GeminiProvider(AIProvider):
         return "gemini"
 
     def is_available(self) -> bool:
+        if not ENABLE_AI_INTEGRATION:
+            return False
         return bool(self.api_key and self.api_key.strip())
 
     def _get_client(self):
