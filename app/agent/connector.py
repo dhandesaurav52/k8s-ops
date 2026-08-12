@@ -69,7 +69,7 @@ class CloudConnector(ClusterConnector):
     ):
         raw_url = cloud_url or os.getenv("SKYOPS_SERVER_URL") or os.getenv("SKYOPS_CLOUD_URL", "http://localhost:8000")
         self.cloud_url = raw_url.rstrip("/")
-        self.agent_token = agent_token or os.getenv("SKYOPS_AGENT_TOKEN", "skyops-agent-secret-token")
+        self.agent_token = agent_token or os.getenv("SKYOPS_AGENT_TOKEN", "")
         self.timeout = timeout
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
