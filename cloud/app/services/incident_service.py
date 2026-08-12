@@ -24,6 +24,17 @@ class IncidentService:
         )
 
     @staticmethod
+    def get_incident_by_incident_id(
+        db: Session, incident_id: str
+    ) -> Optional[Incident]:
+        return (
+            db.query(Incident)
+            .filter(Incident.incident_id == incident_id)
+            .order_by(Incident.created_at.desc())
+            .first()
+        )
+
+    @staticmethod
     def list_incidents(
         db: Session,
         cluster_id: Optional[str] = None,

@@ -1,23 +1,16 @@
-# Default values for skyops.
-# This is a YAML-formatted file.
+# Default values for SkyOps self-hosted deployment.
+# Single Helm installation provisions PostgreSQL database, SkyOps API & Web UI, and SkyOps Agent.
 
-image:
-  repository: dhandesaurav52/skyops-agent
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: "0.1.0"
+global:
+  environment: "production"
 
-imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
-
-server:
-  # SkyOps Server URL endpoint
-  url: "http://skyops-server.skyops.svc.cluster.local:8000"
-
+# SkyOps Agent configuration
 agent:
-  # Optional secret token for agent-to-server authentication
-  token: ""
+  enabled: true
+  image:
+    repository: skyops/agent
+    pullPolicy: IfNotPresent
+    tag: "0.1.0"
   replicas: 1
   resources:
     requests:
@@ -26,20 +19,72 @@ agent:
     limits:
       cpu: 500m
       memory: 512Mi
+  token: "skyops-agent-secret-token"
   nodeSelector: {}
   tolerations: []
   affinity: {}
 
+# SkyOps API & Web UI Server configuration
+api:
+  image:
+    repository: skyops/api
+    pullPolicy: IfNotPresent
+    tag: "0.1.0"
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  service:
+    type: NodePort
+    port: 8000
+    nodePort: 30800
+  adminUsername: "admin"
+  adminPassword: "skyops123"
+  secretKey: "skyops-secret-key-change-in-production"
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# PostgreSQL Database configuration
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "15-alpine"
+    pullPolicy: IfNotPresent
+  host: ""
+  auth:
+    database: skyops
+    username: skyops
+    password: "skyops-pg-password"
+  persistence:
+    enabled: true
+    mountPath: /var/lib/postgresql/data
+    accessMode: ReadWriteOnce
+    size: 5Gi
+    storageClass: ""
+    existingClaim: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# External database override (if postgresql.enabled is false)
+externalDatabase:
+  url: ""
+
 gemini:
-  # Optional Gemini API key for AI-assisted root cause diagnosis
   apiKey: ""
 
-# Optional existing Kubernetes Secret containing SKYOPS_AGENT_TOKEN / GEMINI_API_KEY
+# Optional existing Kubernetes Secret containing SKYOPS_AGENT_TOKEN, POSTGRES_PASSWORD, etc.
 existingSecret: ""
-
-service:
-  type: ClusterIP
-  port: 8080
 
 podSecurityContext:
   runAsNonRoot: true
@@ -49,7 +94,6 @@ podSecurityContext:
 
 securityContext:
   allowPrivilegeEscalation: false
-  readOnlyRootFilesystem: true
   capabilities:
     drop:
       - ALL
@@ -58,26 +102,24 @@ rbac:
   create: true
 
 serviceAccount:
-  # Specifies whether a service account should be created
   create: true
-  # Annotations to add to the service account
   annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
   name: ""
 
-persistence:
-  # Toggle persistent storage for outbox/data directory
+ingress:
   enabled: false
-  mountPath: /app/data
-  accessMode: ReadWriteOnce
-  size: 1Gi
-  storageClass: ""
-  existingClaim: ""
+  className: ""
+  annotations: {}
+  hosts:
+    - host: skyops.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
 
 probes:
   liveness:
-    initialDelaySeconds: 5
+    initialDelaySeconds: 10
     periodSeconds: 10
     timeoutSeconds: 3
     failureThreshold: 3

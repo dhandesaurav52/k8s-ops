@@ -56,6 +56,9 @@ def get_incident(
             db, cluster_id, incident_key
         )
 
+    if not incident and not incident_key.isdigit():
+        incident = IncidentService.get_incident_by_incident_id(db, incident_key)
+
     if not incident:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

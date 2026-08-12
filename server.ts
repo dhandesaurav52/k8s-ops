@@ -155,6 +155,11 @@ async function startServer() {
   app.use('/api/v1', fallbackRouter);
   app.use('/api', fallbackRouter);
 
+  // Unhandled API requests catch-all (prevents returning HTML index.html for API calls)
+  app.use(['/api', '/api/*'], (req: ExpressRequest, res: ExpressResponse) => {
+    res.status(404).json({ detail: `API endpoint '${req.originalUrl}' not found` });
+  });
+
   // --- Vite & Production Static File Handler ---
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

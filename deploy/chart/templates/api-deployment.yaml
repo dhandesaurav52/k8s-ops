@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "skyops.fullname" . }}-api
+  labels:
+    app.kubernetes.io/component: api
+    {{- include "skyops.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.api.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: api
+      {{- include "skyops.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: api
+        {{- include "skyops.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: skyops-api
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "skyops.fullname" . }}-config
+                  key: DATABASE_URL
+            - name: SKYOPS_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "skyops.fullname" . }}-config
+                  key: SKYOPS_ENV
+            - name: SKYOPS_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "skyops.secretName" . }}
+                  key: SKYOPS_AGENT_TOKEN
+            - name: SKYOPS_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "skyops.secretName" . }}
+                  key: SKYOPS_ADMIN_USERNAME
+            - name: SKYOPS_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "skyops.secretName" . }}
+                  key: SKYOPS_ADMIN_PASSWORD
+            - name: SKYOPS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "skyops.secretName" . }}
+                  key: SKYOPS_SECRET_KEY
+            {{- if .Values.gemini.apiKey }}
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "skyops.secretName" . }}
+                  key: GEMINI_API_KEY
+            {{- end }}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+      {{- with .Values.api.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

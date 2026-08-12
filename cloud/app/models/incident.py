@@ -6,6 +6,7 @@ from sqlalchemy import (
     Integer,
     JSON,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
@@ -34,7 +35,7 @@ class Incident(Base):
     resource_uid = Column(String(100), default="", nullable=False)
     category = Column(String(100), nullable=False)
     status = Column(String(20), default="OPEN", nullable=False)  # OPEN | RESOLVED
-    current_state = Column(String(100), default="", nullable=False)
+    current_state = Column(Text, default="", nullable=False)
     severity = Column(String(20), default="MEDIUM", nullable=False)  # LOW | MEDIUM | HIGH | CRITICAL
     occurrences = Column(Integer, default=1, nullable=False)
     diagnosis = Column(JSON, default=dict, nullable=False)

@@ -25,14 +25,16 @@ rules:
       - configmaps
     verbs: ["get", "list", "watch", "create", "update", "patch"]
 
-  # Apps API Group (Read-Only)
+  # Apps API Group (Read & Patch for Remediation)
   - apiGroups: ["apps"]
     resources:
       - deployments
+      - deployments/scale
       - replicasets
       - statefulsets
+      - statefulsets/scale
       - daemonsets
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list", "watch", "update", "patch"]
 
   # Batch API Group (Read-Only)
   - apiGroups: ["batch"]

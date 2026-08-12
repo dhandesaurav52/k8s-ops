@@ -32,8 +32,22 @@ async def lifespan(app: FastAPI):
     os.makedirs("data", exist_ok=True)
     # Initialize database tables
     try:
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database schema verified/created successfully.")
+        alembic_ini_path = os.path.join(os.getcwd(), "cloud", "alembic.ini")
+        if not os.path.exists(alembic_ini_path):
+            alembic_ini_path = os.path.join(os.getcwd(), "alembic.ini")
+
+        if os.path.exists(alembic_ini_path):
+            logger.info(f"Running Alembic migrations from {alembic_ini_path}...")
+            from alembic.config import Config
+            from alembic import command
+            alembic_cfg = Config(alembic_ini_path)
+            script_location = os.path.join(os.path.dirname(os.path.abspath(alembic_ini_path)), "alembic")
+            alembic_cfg.set_main_option("script_location", script_location)
+            command.upgrade(alembic_cfg, "head")
+            logger.info("Alembic database migrations completed successfully.")
+        else:
+            Base.metadata.create_all(bind=engine)
+            logger.info("Database schema verified/created successfully.")
         
         # Ensure default seed cluster exists if DB is fresh
         db = SessionLocal()

@@ -1,0 +1,21 @@
+{{- if and .Values.postgresql.enabled .Values.postgresql.persistence.enabled (not .Values.postgresql.persistence.existingClaim) -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "skyops.postgresql.fullname" . }}-data
+  labels:
+    {{- include "skyops.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.postgresql.persistence.accessMode | default "ReadWriteOnce" }}
+  resources:
+    requests:
+      storage: {{ .Values.postgresql.persistence.size | default "5Gi" }}
+  {{- if .Values.postgresql.persistence.storageClass }}
+  {{- if (eq "-" .Values.postgresql.persistence.storageClass) }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: "{{ .Values.postgresql.persistence.storageClass }}"
+  {{- end }}
+  {{- end }}
+{{- end }}

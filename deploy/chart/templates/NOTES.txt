@@ -1,16 +1,24 @@
-Thank you for installing SkyOps Agent!
+SkyOps Self-Hosted Platform has been successfully deployed to your Kubernetes cluster!
 
-Release Name: {{ .Release.Name }}
-Namespace:    {{ .Release.Namespace }}
+1. Get the application URL:
+{{- if .Values.ingress.enabled }}
+  http://{{ (index .Values.ingress.hosts 0).host }}
+{{- else if contains "NodePort" .Values.api.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "skyops.fullname" . }}-api)
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[?(@.type=='InternalIP')].address}")
+  echo "SkyOps UI & API is available at: http://$NODE_IP:$NODE_PORT"
+{{- else if contains "LoadBalancer" .Values.api.service.type }}
+  NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "skyops.fullname" . }}-api --template "{{ "{{ range (index .status.loadBalancer.ingress 0) }}{{ . }}{{ end }}" }}")
+  echo "SkyOps UI & API is available at: http://$SERVICE_IP:8000"
+{{- else if contains "ClusterIP" .Values.api.service.type }}
+  kubectl port-forward --namespace {{ .Release.Namespace }} service/{{ include "skyops.fullname" . }}-api 8000:8000
+  echo "SkyOps UI & API is available at: http://127.0.0.1:8000"
+{{- end }}
 
-1. Check deployment status:
+2. Default Admin Credentials:
+   Username: {{ .Values.api.adminUsername | default "admin" }}
+   Password: (Configured via Secret)
+
+3. Check Pod Status:
    kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
-
-2. View live agent telemetry logs:
-   kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }} -f
-
-3. SkyOps Server Endpoint:
-   {{ .Values.server.url }}
-
-4. To manage or upgrade this release:
-   helm upgrade {{ .Release.Name }} ./deploy/chart --namespace {{ .Release.Namespace }} --set server.url="{{ .Values.server.url }}"

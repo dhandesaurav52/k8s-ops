@@ -34,7 +34,7 @@ class ApiService {
     if (!res.ok) {
       throw new Error('Invalid credentials');
     }
-    const data = await res.json();
+    const data = await this.safeJson<any>(res);
     if (data.token) {
       this.setAuthToken(data.token);
     }
@@ -43,6 +43,9 @@ class ApiService {
 
   private async safeJson<T = any>(res: Response): Promise<T> {
     const text = await res.text();
+    if (text.trim().startsWith('<')) {
+      throw new Error(`Server returned HTML instead of JSON (HTTP ${res.status}). Check backend routing.`);
+    }
     try {
       return JSON.parse(text) as T;
     } catch {
@@ -564,7 +567,7 @@ class ApiService {
       throw new Error(`Metrics API error: ${res.status}`);
     }
 
-    return await res.json();
+    return await this.safeJson<ClusterMetricSummary>(res);
   }
 
   /**
@@ -584,7 +587,7 @@ class ApiService {
       throw new Error(`Node Metrics API error: ${res.status}`);
     }
 
-    return await res.json();
+    return await this.safeJson<NodeMetric[]>(res);
   }
 
   /**
@@ -604,7 +607,7 @@ class ApiService {
       throw new Error(`Pod Metrics API error: ${res.status}`);
     }
 
-    return await res.json();
+    return await this.safeJson<PodMetric[]>(res);
   }
 
   /**
@@ -624,7 +627,7 @@ class ApiService {
       throw new Error(`Metric History API error: ${res.status}`);
     }
 
-    return await res.json();
+    return await this.safeJson<MetricHistoryResponse>(res);
   }
 
   /**

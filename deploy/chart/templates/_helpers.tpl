@@ -71,3 +71,32 @@ Secret name helper
 {{- printf "%s-secrets" (include "skyops.fullname" .) }}
 {{- end }}
 {{- end }}
+
+{{/*
+PostgreSQL fullname helper
+*/}}
+{{- define "skyops.postgresql.fullname" -}}
+{{- printf "%s-postgresql" (include "skyops.fullname" .) }}
+{{- end }}
+
+{{/*
+PostgreSQL host helper
+*/}}
+{{- define "skyops.postgresql.host" -}}
+{{- if .Values.postgresql.host }}
+{{- .Values.postgresql.host }}
+{{- else }}
+{{- include "skyops.postgresql.fullname" . }}
+{{- end }}
+{{- end }}
+
+{{/*
+Database URL helper
+*/}}
+{{- define "skyops.databaseUrl" -}}
+{{- if .Values.externalDatabase.url }}
+{{- .Values.externalDatabase.url }}
+{{- else }}
+{{- printf "postgresql://%s:%s@%s:5432/%s" .Values.postgresql.auth.username .Values.postgresql.auth.password (include "skyops.postgresql.host" .) .Values.postgresql.auth.database }}
+{{- end }}
+{{- end }}
