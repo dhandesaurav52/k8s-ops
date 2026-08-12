@@ -93,7 +93,8 @@ def test_first_run_auth_flow(client: TestClient):
     )
     assert res.status_code == 200
 
-    # 11. Test protected endpoints without auth token (should return 401)
+    # 11. Test protected endpoints without auth token or session cookie (should return 401)
+    client.cookies.clear()
     res = client.get("/api/v1/clusters")
     assert res.status_code == 401
 
