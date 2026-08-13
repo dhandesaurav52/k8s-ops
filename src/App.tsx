@@ -12,9 +12,7 @@ import { MetricsView } from './components/MetricsView';
 import { EventStreamConsole } from './components/EventStreamConsole';
 import { SettingsModal } from './components/SettingsModal';
 import { SimulateIncidentModal } from './components/SimulateIncidentModal';
-import { InitialSetupScreen } from './components/InitialSetupScreen';
-import { LoginScreen } from './components/LoginScreen';
-import { AlertTriangle, RefreshCw, Shield } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default function App() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -30,14 +28,17 @@ export default function App() {
   const [isApiUnavailable, setIsApiUnavailable] = useState<boolean>(false);
   const [apiErrorMessage, setApiErrorMessage] = useState<string>('');
 
-  // Authentication & Setup state
-  const [authStatus, setAuthStatus] = useState<{
+  // Authentication & Setup state (Auth disabled)
+  const [authStatus] = useState<{
     is_setup_completed: boolean;
     authenticated: boolean;
     user: { username: string; role: string; email?: string } | null;
-  } | null>(null);
-  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
-  const [loginSuccessMsg, setLoginSuccessMsg] = useState<string | null>(null);
+  }>({
+    is_setup_completed: true,
+    authenticated: true,
+    user: { username: 'admin', role: 'admin', email: 'admin@skyops.internal' },
+  });
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(false);
 
   const [filters, setFilters] = useState<FilterOptions>({
     searchQuery: '',
@@ -48,21 +49,13 @@ export default function App() {
     namespace: 'ALL',
   });
 
-  // Verify authentication and setup status
+  // Auth bypass check
   const checkAuth = async () => {
-    try {
-      const status = await apiService.getAuthStatus();
-      setAuthStatus(status);
-    } catch {
-      setAuthStatus({ is_setup_completed: false, authenticated: false, user: null });
-    } finally {
-      setIsCheckingAuth(false);
-    }
+    setIsCheckingAuth(false);
   };
 
   const handleLogout = async () => {
-    await apiService.logout();
-    await checkAuth();
+    // Auth system deprecated
   };
 
   useEffect(() => {
@@ -193,42 +186,6 @@ export default function App() {
   const criticalIncidentCount = incidents.filter(
     (i) => i.status === 'OPEN' && i.severity === 'CRITICAL'
   ).length;
-
-  if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100 font-sans">
-        <div className="w-12 h-12 bg-cyan-950 border border-cyan-800 rounded-xl flex items-center justify-center text-cyan-400 mb-4 animate-pulse">
-          <Shield className="w-6 h-6 text-cyan-400 animate-spin" />
-        </div>
-        <div className="text-sm font-semibold tracking-wider text-slate-300">
-          Initializing SkyOps Security Engine...
-        </div>
-      </div>
-    );
-  }
-
-  if (!authStatus?.is_setup_completed) {
-    return (
-      <InitialSetupScreen
-        onSetupComplete={async () => {
-          setLoginSuccessMsg('Setup complete! Please log in with your newly created administrator account.');
-          await checkAuth();
-        }}
-      />
-    );
-  }
-
-  if (!authStatus?.authenticated) {
-    return (
-      <LoginScreen
-        successMessage={loginSuccessMsg}
-        onLoginSuccess={async () => {
-          setLoginSuccessMsg(null);
-          await checkAuth();
-        }}
-      />
-    );
-  }
 
   return (
     <div

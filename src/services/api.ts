@@ -97,18 +97,6 @@ class ApiService {
     return data;
   }
 
-  async logout(): Promise<void> {
-    try {
-      await this.requestWithRetry(this.getUrl('/api/v1/auth/logout'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-    } catch {
-      // ignore
-    }
-    this.setAuthToken('');
-  }
-
   private async safeJson<T = any>(res: Response): Promise<T> {
     const text = await res.text();
     if (text.trim().startsWith('<')) {

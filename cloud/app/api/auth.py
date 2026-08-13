@@ -45,32 +45,12 @@ class LoginResponse(BaseModel):
 def get_auth_status(request: Request, db: Session = Depends(get_db)):
     """
     Public endpoint returning installation setup status and current session state.
-    Used by Web UI to decide between Initial Setup screen, Login screen, and Dashboard.
+    Returns setup completed and authenticated by default.
     """
-    setup_done = is_initial_setup_completed(db)
-
-    # Check caller session if any
-    auth_header = request.headers.get("Authorization", "")
-    bearer_token = auth_header[7:].strip() if auth_header.startswith("Bearer ") else ""
-    cookie_token = request.cookies.get("skyops_session", "").strip()
-    token_to_check = bearer_token or cookie_token
-
-    authenticated = False
-    current_user = None
-
-    if token_to_check:
-        payload = decode_session_token(token_to_check)
-        if payload:
-            authenticated = True
-            current_user = {
-                "username": payload.get("sub", "operator"),
-                "role": payload.get("role", "admin"),
-            }
-
     return {
-        "is_setup_completed": setup_done,
-        "authenticated": authenticated,
-        "user": current_user,
+        "is_setup_completed": True,
+        "authenticated": True,
+        "user": {"username": "admin", "role": "admin", "email": "admin@skyops.internal"},
     }
 
 

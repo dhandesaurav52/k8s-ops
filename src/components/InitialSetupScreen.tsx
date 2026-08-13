@@ -159,17 +159,30 @@ export const InitialSetupScreen: React.FC<InitialSetupScreenProps> = ({ onSetupC
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2 flex items-center gap-1.5">
-                <Key className="w-4 h-4 text-cyan-400" /> Initial Administrator Password
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                  <Key className="w-4 h-4 text-cyan-400" /> Initial Administrator Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setInitialPassword('skyops123')}
+                  className="text-xs text-cyan-400 hover:text-cyan-300 font-mono bg-cyan-950/60 hover:bg-cyan-900/80 px-2 py-0.5 rounded border border-cyan-800/60 transition cursor-pointer"
+                >
+                  Quick Fill Dev Password (skyops123)
+                </button>
+              </div>
               <input
                 type="password"
                 value={initialPassword}
                 onChange={(e) => setInitialPassword(e.target.value)}
-                placeholder="Enter password from kubectl secret"
+                placeholder="Enter password (default: skyops123)"
                 className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-mono text-sm transition"
                 required
               />
+              <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>Default local testing password: <code className="bg-slate-900 px-1 py-0.5 rounded text-cyan-300 font-mono">skyops123</code></span>
+              </p>
             </div>
 
             <button
