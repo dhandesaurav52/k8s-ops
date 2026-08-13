@@ -1,0 +1,22 @@
+apiVersion: v1
+entries:
+  skyops:
+  - apiVersion: v2
+    appVersion: 1.0.0
+    created: "2026-08-13T11:34:54.019529+05:30"
+    description: Production-grade Helm chart for SkyOps Kubernetes Agent
+    digest: d35aa2825152c2416eb75548d1d723da1159c762a1f2342b0114f214f42113eb
+    keywords:
+    - skyops
+    - observability
+    - kubernetes
+    - agent
+    - remediation
+    maintainers:
+    - name: SkyOps Team
+    name: skyops
+    type: application
+    urls:
+    - https://dhandesaurav52.github.io/k8s-ops/skyops-1.0.0.tgz
+    version: 1.0.0
+generated: "2026-08-13T11:34:54.017825+05:30"
