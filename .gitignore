@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local development database
+# Keep tracked if already committed; this only affects untracked copies.
