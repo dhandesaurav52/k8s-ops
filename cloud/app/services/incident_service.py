@@ -11,26 +11,36 @@ from cloud.app.services.cluster_service import ClusterService
 
 class IncidentService:
     @staticmethod
-    def get_incident(db: Session, incident_db_id: int) -> Optional[Incident]:
-        return db.query(Incident).filter(Incident.id == incident_db_id).first()
+    def get_incident(db: Session, incident_db_id: int, organization_id: Optional[str] = None) -> Optional[Incident]:
+        query = db.query(Incident).filter(Incident.id == incident_db_id)
+        if organization_id:
+            query = query.filter(Incident.organization_id == organization_id)
+        return query.first()
 
     @staticmethod
     def get_incident_by_cluster_and_incident_id(
-        db: Session, cluster_id: str, incident_id: str
+        db: Session, organization_id: str, cluster_id: str, incident_id: str
     ) -> Optional[Incident]:
         return (
             db.query(Incident)
-            .filter(Incident.cluster_id == cluster_id, Incident.incident_id == incident_id)
+            .filter(
+                Incident.organization_id == organization_id,
+                Incident.cluster_id == cluster_id,
+                Incident.incident_id == incident_id,
+            )
             .first()
         )
 
     @staticmethod
     def get_incident_by_incident_id(
-        db: Session, incident_id: str
+        db: Session, organization_id: str, incident_id: str
     ) -> Optional[Incident]:
         return (
             db.query(Incident)
-            .filter(Incident.incident_id == incident_id)
+            .filter(
+                Incident.organization_id == organization_id,
+                Incident.incident_id == incident_id,
+            )
             .order_by(Incident.created_at.desc())
             .first()
         )
@@ -38,12 +48,13 @@ class IncidentService:
     @staticmethod
     def list_incidents(
         db: Session,
+        organization_id: str,
         cluster_id: Optional[str] = None,
         status: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
     ) -> List[Incident]:
-        query = db.query(Incident)
+        query = db.query(Incident).filter(Incident.organization_id == organization_id)
         if cluster_id:
             query = query.filter(Incident.cluster_id == cluster_id)
         if status:
@@ -51,29 +62,14 @@ class IncidentService:
         return query.order_by(Incident.created_at.desc()).offset(skip).limit(limit).all()
 
     @staticmethod
-    def create_or_upsert_incident(db: Session, data: IncidentCreate) -> Incident:
+    def create_or_upsert_incident(
+        db: Session, organization_id: str, data: IncidentCreate
+    ) -> Incident:
         now = datetime.now(timezone.utc)
 
         # 1. Ensure Cluster exists and update heartbeat
-        cluster = ClusterService.get_cluster(db, data.cluster_id)
-        if not cluster:
-            try:
-                cluster = Cluster(
-                    cluster_id=data.cluster_id,
-                    name=data.cluster_id,
-                    kubernetes_version="unknown",
-                    status="CONNECTED",
-                    last_seen=now,
-                    created_at=now,
-                    updated_at=now,
-                )
-                db.add(cluster)
-                db.commit()
-                db.refresh(cluster)
-            except IntegrityError:
-                db.rollback()
-                cluster = ClusterService.get_cluster(db, data.cluster_id)
-        elif cluster:
+        cluster = db.query(Cluster).filter(Cluster.cluster_id == data.cluster_id).first()
+        if cluster:
             try:
                 cluster.last_seen = now
                 cluster.status = "CONNECTED"
@@ -81,22 +77,23 @@ class IncidentService:
             except Exception:
                 db.rollback()
 
-        # Safely extract and normalize dicts/lists
+        # Safely extract dicts/lists
         diagnosis_dict = data.diagnosis if isinstance(data.diagnosis, dict) else {}
         investigation_dict = data.investigation if isinstance(data.investigation, dict) else {}
         ai_analysis_dict = data.ai_analysis if isinstance(data.ai_analysis, dict) else {}
         history_list = data.state_history if isinstance(data.state_history, list) else []
 
-        # 2. Check for existing incident by (cluster_id, incident_id)
+        # 2. Check for existing incident by (organization_id, cluster_id, incident_id)
         existing = IncidentService.get_incident_by_cluster_and_incident_id(
-            db, data.cluster_id, data.incident_id
+            db, organization_id, data.cluster_id, data.incident_id
         )
 
-        # 2b. If not found by incident_id, check for active OPEN incident on same resource_uid
+        # 2b. Check for active OPEN incident on same resource_uid
         if not existing and data.resource_uid:
             existing = (
                 db.query(Incident)
                 .filter(
+                    Incident.organization_id == organization_id,
                     Incident.cluster_id == data.cluster_id,
                     Incident.resource_uid == data.resource_uid,
                     Incident.status == "OPEN",
@@ -130,7 +127,7 @@ class IncidentService:
             except Exception:
                 db.rollback()
                 existing = IncidentService.get_incident_by_cluster_and_incident_id(
-                    db, data.cluster_id, data.incident_id
+                    db, organization_id, data.cluster_id, data.incident_id
                 )
                 if existing:
                     return existing
@@ -139,6 +136,7 @@ class IncidentService:
         # Create new incident
         resolved_at = now if data.status == "RESOLVED" else None
         new_incident = Incident(
+            organization_id=organization_id,
             cluster_id=data.cluster_id,
             incident_id=data.incident_id,
             resource_kind=data.resource_kind or "Pod",
@@ -165,30 +163,10 @@ class IncidentService:
             return new_incident
         except IntegrityError:
             db.rollback()
-            # Retry fetching existing incident if another concurrent request inserted it
             existing = IncidentService.get_incident_by_cluster_and_incident_id(
-                db, data.cluster_id, data.incident_id
+                db, organization_id, data.cluster_id, data.incident_id
             )
             if existing:
-                existing.category = data.category
-                existing.current_state = data.current_state or existing.current_state
-                existing.severity = data.severity or existing.severity
-                existing.occurrences = data.occurrences or existing.occurrences
-                if data.status:
-                    existing.status = data.status
-                    if data.status == "RESOLVED" and not existing.resolved_at:
-                        existing.resolved_at = now
-                if diagnosis_dict:
-                    existing.diagnosis = diagnosis_dict
-                if investigation_dict:
-                    existing.investigation = investigation_dict
-                if ai_analysis_dict:
-                    existing.ai_analysis = ai_analysis_dict
-                if history_list:
-                    existing.state_history = history_list
-                existing.updated_at = now
-                db.commit()
-                db.refresh(existing)
                 return existing
             raise
 

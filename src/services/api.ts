@@ -183,6 +183,28 @@ class ApiService {
   }
 
   /**
+   * Onboard a new cluster and generate a registration token and Helm command.
+   */
+  async onboardCluster(clusterName: string): Promise<{ cluster_id: string; name: string; agent_token: string; helm_command: string }> {
+    const res = await this.requestWithRetry(
+      this.getUrl(`/api/v1/organizations/clusters/onboard?cluster_name=${encodeURIComponent(clusterName)}`),
+      {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+      },
+      12000,
+      1
+    );
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Failed to onboard cluster (${res.status}): ${errText || res.statusText}`);
+    }
+
+    return await this.safeJson(res);
+  }
+
+  /**
    * Fetch all registered Kubernetes clusters from SkyOps Server API.
    */
   async fetchClusters(): Promise<ClusterInfo[]> {

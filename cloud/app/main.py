@@ -12,6 +12,7 @@ from cloud.app.api.clusters import router as clusters_router
 from cloud.app.api.health import router as health_router
 from cloud.app.api.incidents import router as incidents_router
 from cloud.app.api.metrics import router as metrics_router
+from cloud.app.api.organizations import router as organizations_router
 from cloud.app.api.remediations import router as remediations_router
 from cloud.app.config import settings
 from cloud.app.database import Base, engine, SessionLocal
@@ -103,6 +104,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Register API routers
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(organizations_router)
 app.include_router(clusters_router)
 app.include_router(incidents_router)
 app.include_router(metrics_router)

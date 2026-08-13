@@ -300,6 +300,7 @@ export default function App() {
                   selectedClusterId={selectedClusterId}
                   onSelectCluster={handleSelectCluster}
                   onNavigateTab={setActiveTab}
+                  onClusterAdded={() => loadData(false)}
                 />
               )}
 

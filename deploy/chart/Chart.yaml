@@ -1,14 +1,14 @@
 apiVersion: v2
-name: skyops
-description: Production-grade Helm chart for SkyOps Kubernetes Agent
+name: agent
+description: SkyOps Agent Helm Chart for Kubernetes cluster monitoring and incident collection
 type: application
 version: 1.0.0
 appVersion: "1.0.0"
 keywords:
   - skyops
+  - agent
   - observability
   - kubernetes
-  - agent
-  - remediation
+  - incident-management
 maintainers:
   - name: SkyOps Team

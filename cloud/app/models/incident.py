@@ -22,6 +22,12 @@ class Incident(Base):
     __tablename__ = "incidents"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    organization_id = Column(
+        String(100),
+        ForeignKey("organizations.org_id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
     cluster_id = Column(
         String(100),
         ForeignKey("clusters.cluster_id", ondelete="CASCADE"),
@@ -34,7 +40,7 @@ class Incident(Base):
     resource_name = Column(String(255), nullable=False)
     resource_uid = Column(String(100), default="", nullable=False)
     category = Column(String(100), nullable=False)
-    status = Column(String(20), default="OPEN", nullable=False)  # OPEN | RESOLVED
+    status = Column(String(20), default="OPEN", nullable=False)  # OPEN | INVESTIGATING | RESOLVED | ACKNOWLEDGED
     current_state = Column(Text, default="", nullable=False)
     severity = Column(String(20), default="MEDIUM", nullable=False)  # LOW | MEDIUM | HIGH | CRITICAL
     occurrences = Column(Integer, default=1, nullable=False)
@@ -46,6 +52,7 @@ class Incident(Base):
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
 
+    organization = relationship("Organization", back_populates="incidents")
     cluster = relationship("Cluster", back_populates="incidents")
 
     __table_args__ = (

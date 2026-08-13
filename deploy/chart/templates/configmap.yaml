@@ -5,6 +5,5 @@ metadata:
   labels:
     {{- include "skyops.labels" . | nindent 4 }}
 data:
-  SKYOPS_ENV: {{ default "production" .Values.global.environment | quote }}
-  SKYOPS_SERVER_URL: {{ printf "http://%s-api:8000" (include "skyops.fullname" .) | quote }}
-  DATABASE_URL: {{ include "skyops.databaseUrl" . | quote }}
+  SKYOPS_SERVER_URL: {{ .Values.server.url | quote }}
+  SKYOPS_CLUSTER_NAME: {{ .Values.cluster.name | quote }}

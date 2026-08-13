@@ -4,11 +4,16 @@ import hashlib
 import hmac
 import json
 import time
-from typing import Any, Dict, Optional
-from fastapi import HTTPException, Request, status
+import secrets
+from typing import Any, Dict, Optional, Tuple
+from fastapi import HTTPException, Request, Depends, status
 from sqlalchemy.orm import Session
+
 from cloud.app.config import settings
+from cloud.app.database import get_db
 from cloud.app.models.user import User, SystemSetting
+from cloud.app.models.organization import Organization, Membership
+from cloud.app.models.cluster import Cluster
 
 
 def b64url_encode(data: bytes) -> str:
@@ -44,21 +49,13 @@ def verify_password(password: str, hashed: str) -> bool:
         return False
 
 
-def is_initial_setup_completed(db: Session) -> bool:
-    """Check if initial administrator setup has been completed."""
-    return True
-
-
-def verify_initial_password(provided_password: str) -> bool:
-    """Verify provided initial password against SKYOPS_INITIAL_ADMIN_PASSWORD in constant time."""
-    if not provided_password:
-        return False
-    target_password = settings.SKYOPS_INITIAL_ADMIN_PASSWORD or settings.SKYOPS_ADMIN_PASSWORD or "skyops123"
-    return hmac.compare_digest(provided_password, target_password)
+def generate_agent_token() -> str:
+    """Generate a secure, random agent registration token."""
+    return f"skyops_agent_tok_{secrets.token_urlsafe(24)}"
 
 
 def create_session_token(username: str, role: str = "operator", expires_in_seconds: int = 86400) -> str:
-    """Create a HMAC-SHA256 signed session token."""
+    """Create an HMAC-SHA256 signed session token."""
     header = {"alg": "HS256", "typ": "JWT"}
     now = int(time.time())
     payload = {
@@ -102,25 +99,51 @@ def decode_session_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def verify_agent_token(token: str) -> bool:
-    """Constant-time verification of SKYOPS_AGENT_TOKEN."""
-    if not token or not settings.SKYOPS_AGENT_TOKEN:
-        return False
-    return hmac.compare_digest(token, settings.SKYOPS_AGENT_TOKEN)
-
-
-def verify_admin_credentials(username: str, password: str) -> bool:
-    """Constant-time verification of admin credentials (legacy fallback)."""
-    user_ok = hmac.compare_digest(username, settings.SKYOPS_ADMIN_USERNAME)
-    pass_ok = hmac.compare_digest(password, settings.SKYOPS_ADMIN_PASSWORD)
-    return user_ok and pass_ok
-
-
-def get_current_identity(request: Request) -> Dict[str, Any]:
+def get_default_or_user_organization(db: Session, user: Optional[User] = None) -> Organization:
     """
-    FastAPI security dependency to authenticate requests via:
-    1. Authorization Bearer header (Agent Token OR User Session Token)
-    2. HttpOnly Cookie 'skyops_session'
+    Get or create default organization for the user or system.
+    Guarantees that an organization always exists.
+    """
+    if user:
+        membership = db.query(Membership).filter(Membership.user_id == user.user_id).first()
+        if membership:
+            org = db.query(Organization).filter(Organization.org_id == membership.organization_id).first()
+            if org:
+                return org
+
+    # Fallback/Default organization
+    default_org = db.query(Organization).filter(Organization.slug == "default-org").first()
+    if not default_org:
+        default_org = Organization(
+            org_id="org-default",
+            name="Default Organization",
+            slug="default-org",
+        )
+        db.add(default_org)
+        db.commit()
+        db.refresh(default_org)
+
+    if user:
+        # Create membership
+        mem = db.query(Membership).filter(
+            Membership.organization_id == default_org.org_id,
+            Membership.user_id == user.user_id,
+        ).first()
+        if not mem:
+            mem = Membership(
+                organization_id=default_org.org_id,
+                user_id=user.user_id,
+                role="admin",
+            )
+            db.add(mem)
+            db.commit()
+
+    return default_org
+
+
+def get_current_identity(request: Request, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """
+    FastAPI dependency to resolve the caller's identity (User vs Agent) and Organization context.
     """
     auth_header = request.headers.get("Authorization", "")
     bearer_token = ""
@@ -128,21 +151,48 @@ def get_current_identity(request: Request) -> Dict[str, Any]:
         bearer_token = auth_header[7:].strip()
 
     cookie_token = request.cookies.get("skyops_session", "").strip()
+    token = bearer_token or cookie_token
 
-    # 1. Check Agent Token (Bearer)
-    if bearer_token and verify_agent_token(bearer_token):
-        return {"type": "agent", "sub": "agent", "role": "agent"}
-
-    # 2. Check User Session Token (Bearer or Cookie)
-    token_to_check = bearer_token or cookie_token
-    if token_to_check:
-        user_payload = decode_session_token(token_to_check)
-        if user_payload:
+    # 1. Check if token matches a Cluster Agent Token in DB
+    if bearer_token:
+        cluster = db.query(Cluster).filter(Cluster.agent_token == bearer_token).first()
+        if cluster:
             return {
-                "type": "user",
-                "sub": user_payload.get("sub", "operator"),
-                "role": user_payload.get("role", "operator"),
+                "type": "agent",
+                "cluster_id": cluster.cluster_id,
+                "organization_id": cluster.organization_id,
+                "role": "agent",
+            }
+        
+        # Fallback to global SKYOPS_AGENT_TOKEN if defined
+        if settings.SKYOPS_AGENT_TOKEN and hmac.compare_digest(bearer_token, settings.SKYOPS_AGENT_TOKEN):
+            org = get_default_or_user_organization(db)
+            return {
+                "type": "agent",
+                "cluster_id": "default-cluster",
+                "organization_id": org.org_id,
+                "role": "agent",
             }
 
-    # 3. Default identity for unauthenticated requests
-    return {"type": "user", "sub": "admin", "role": "admin"}
+    # 2. Check User Session Token
+    if token:
+        payload = decode_session_token(token)
+        if payload:
+            username = payload.get("sub", "admin")
+            user = db.query(User).filter(User.username == username).first()
+            org = get_default_or_user_organization(db, user)
+            return {
+                "type": "user",
+                "username": username,
+                "organization_id": org.org_id,
+                "role": payload.get("role", "admin"),
+            }
+
+    # 3. Default fallback for local/unauthenticated UI requests
+    org = get_default_or_user_organization(db)
+    return {
+        "type": "user",
+        "username": "admin",
+        "organization_id": org.org_id,
+        "role": "admin",
+    }
