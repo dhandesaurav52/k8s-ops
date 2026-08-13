@@ -11,23 +11,7 @@ router = APIRouter(
 )
 
 # In-memory store for remediations and audit logs
-remediations_store: List[Dict[str, Any]] = [
-    {
-        "remediation_id": "REM-0842",
-        "incident_id": "INC-0842",
-        "cluster_id": "skyops-cluster-prod-us",
-        "action_type": "RESOURCE_ADJUSTMENT",
-        "target_kind": "Deployment",
-        "namespace": "payments",
-        "target_name": "payment-processor",
-        "command_action": "kubectl patch deployment payment-processor -n payments --type=json -p='[{\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/resources/limits/memory\", \"value\": \"1Gi\"}]'",
-        "rationale": "Container memory limit exceeded peak RSS (524Mi). Increasing limit from 512Mi to 1Gi prevents OOM-killer termination.",
-        "risk_level": "LOW",
-        "approval_status": "PENDING",
-        "execution_status": "NOT_EXECUTED",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-]
+remediations_store: List[Dict[str, Any]] = []
 
 audit_store: List[Dict[str, Any]] = []
 

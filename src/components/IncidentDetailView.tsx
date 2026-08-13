@@ -71,9 +71,52 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
   const isResolved = incident.status === 'RESOLVED';
 
   const rawLogs = investigation.recent_logs || [];
-  const filteredLogs = rawLogs.filter((log: string) =>
-    logSearchQuery ? log.toLowerCase().includes(logSearchQuery.toLowerCase()) : true
-  );
+  const filteredLogs = rawLogs.filter((log: any) => {
+    const logStr = typeof log === 'string' ? log : JSON.stringify(log);
+    return logSearchQuery ? logStr.toLowerCase().includes(logSearchQuery.toLowerCase()) : true;
+  });
+
+  const renderSafeString = (val: any, fallback = '-'): string => {
+    if (val === null || val === undefined) return fallback;
+    if (typeof val === 'string') return val;
+    if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+    if (typeof val === 'object') {
+      return val.message || val.reason || val.name || val.state || JSON.stringify(val);
+    }
+    return String(val);
+  };
+
+  const renderStateHistoryItem = (st: any) => {
+    if (st === null || st === undefined) return 'Unknown';
+    if (typeof st === 'string' || typeof st === 'number' || typeof st === 'boolean') {
+      return String(st);
+    }
+    if (typeof st === 'object') {
+      const stateVal = st.state || st.current_state || st.status || st.phase || st.name;
+      const reasonVal = st.reason || st.message;
+      const timeVal = st.timestamp || st.time || st.created_at;
+
+      const parts = [];
+      if (stateVal && typeof stateVal === 'string') parts.push(stateVal);
+      else if (stateVal && typeof stateVal === 'object') parts.push(JSON.stringify(stateVal));
+      if (reasonVal && typeof reasonVal === 'string') parts.push(`(${reasonVal})`);
+      if (timeVal) {
+        try {
+          const d = new Date(timeVal);
+          if (!isNaN(d.getTime())) {
+            parts.push(`at ${d.toLocaleTimeString()}`);
+          }
+        } catch {
+          // ignore
+        }
+      }
+      if (parts.length > 0) {
+        return parts.join(' ');
+      }
+      return JSON.stringify(st);
+    }
+    return String(st);
+  };
 
   return (
     <div className="space-y-4 font-mono text-xs text-neutral-200 select-none">
@@ -333,11 +376,11 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                         className="p-2 bg-neutral-950 border border-neutral-800/80 rounded flex items-start gap-2 text-xs"
                       >
                         <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-900 font-mono text-[10px] shrink-0 font-bold">
-                          {ev.source || ev.signal_type || 'SIGNAL'}
+                          {renderSafeString(ev?.source || ev?.signal_type, 'SIGNAL')}
                         </span>
                         <div className="text-neutral-300">
-                          <span className="font-bold text-neutral-200">{ev.signal_type ? `${ev.signal_type}: ` : ''}</span>
-                          {ev.observation || ev.message || JSON.stringify(ev)}
+                          <span className="font-bold text-neutral-200">{ev?.signal_type ? `${renderSafeString(ev.signal_type)}: ` : ''}</span>
+                          {renderSafeString(ev?.observation || ev?.message || ev)}
                         </div>
                       </div>
                     ))}
@@ -365,7 +408,7 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                         <span className="px-1.5 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800 font-mono text-[10px] shrink-0 font-bold">
                           CONTRADICTION
                         </span>
-                        <div className="text-neutral-300">{ev.statement || JSON.stringify(ev)}</div>
+                        <div className="text-neutral-300">{renderSafeString(ev?.statement || ev)}</div>
                       </div>
                     ))}
                   </div>
@@ -488,24 +531,27 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                     INVESTIGATION & DIAGNOSTIC COMMANDS
                   </div>
                   <div className="space-y-1.5">
-                    {aiAnalysis.suggested_kubectl.map((cmd: string, idx: number) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between bg-neutral-950 border border-neutral-800 rounded px-2.5 py-1.5 font-mono text-neutral-300 text-[11px]"
-                      >
-                        <code className="truncate mr-2">{cmd}</code>
-                        <button
-                          onClick={() => handleCopy(cmd)}
-                          className="text-neutral-500 hover:text-neutral-200 text-[10px] cursor-pointer"
+                    {aiAnalysis.suggested_kubectl.map((cmd: any, idx: number) => {
+                      const cmdStr = renderSafeString(cmd);
+                      return (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between bg-neutral-950 border border-neutral-800 rounded px-2.5 py-1.5 font-mono text-neutral-300 text-[11px]"
                         >
-                          {copiedText === cmd ? (
-                            <Check className="w-3 h-3 text-emerald-400" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
-                      </div>
-                    ))}
+                          <code className="truncate mr-2">{cmdStr}</code>
+                          <button
+                            onClick={() => handleCopy(cmdStr)}
+                            className="text-neutral-500 hover:text-neutral-200 text-[10px] cursor-pointer"
+                          >
+                            {copiedText === cmdStr ? (
+                              <Check className="w-3 h-3 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -566,7 +612,7 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
               </div>
               <ul className="space-y-2">
                 {(aiAnalysis.probable_causes || ['Configuration or resource limits mismatch']).map(
-                  (cause: string, i: number) => (
+                  (cause: any, i: number) => (
                     <li
                       key={i}
                       className="p-2 bg-neutral-950 border border-neutral-800/80 rounded text-neutral-300 flex items-start gap-2 text-xs"
@@ -574,7 +620,7 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                       <span className="w-4 h-4 rounded-full bg-amber-950 text-amber-400 border border-amber-800/80 flex items-center justify-center text-[10px] shrink-0 font-bold">
                         {i + 1}
                       </span>
-                      <span>{cause}</span>
+                      <span>{renderSafeString(cause)}</span>
                     </li>
                   )
                 )}
@@ -588,12 +634,12 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                 <span>STATE TRANSITION TIMELINE</span>
               </div>
               <div className="space-y-2 relative before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-neutral-800">
-                {(incident.state_history || ['Pending', incident.current_state]).map(
-                  (st: string, idx: number) => (
+                {(incident.state_history || ['Pending', incident.current_state || 'Running']).map(
+                  (st: any, idx: number) => (
                     <div key={idx} className="flex items-center gap-3 relative pl-6">
                       <div className="w-2 h-2 rounded-full bg-cyan-400 border border-neutral-900 absolute left-1" />
                       <div className="p-1.5 bg-neutral-950 border border-neutral-800 rounded text-neutral-300 w-full flex items-center justify-between text-[11px]">
-                        <span>{st}</span>
+                        <span>{renderStateHistoryItem(st)}</span>
                         <span className="text-[10px] text-neutral-500">Step #{idx + 1}</span>
                       </div>
                     </div>
@@ -635,18 +681,18 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                   <tbody className="divide-y divide-neutral-800">
                     {evidenceTimeline.map((item: any, idx: number) => (
                       <tr key={idx} className="hover:bg-neutral-950/60">
-                        <td className="py-2 px-3 text-cyan-400 font-bold">{item.evidence_id || `EVD-${idx + 1}`}</td>
+                        <td className="py-2 px-3 text-cyan-400 font-bold">{renderSafeString(item.evidence_id, `EVD-${idx + 1}`)}</td>
                         <td className="py-2 px-3 text-neutral-400 text-[11px]">
-                          {new Date(item.timestamp).toLocaleTimeString()}
+                          {item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : '-'}
                         </td>
                         <td className="py-2 px-3">
                           <span className="px-1.5 py-0.5 rounded bg-neutral-950 border border-neutral-800 text-neutral-300 font-bold text-[10px]">
-                            {item.source}
+                            {renderSafeString(item.source, 'AGENT')}
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-neutral-300 text-[11px] font-semibold">{item.resource}</td>
-                        <td className="py-2 px-3 text-amber-400 font-bold">{item.signal_type}</td>
-                        <td className="py-2 px-3 text-neutral-200 text-xs max-w-md truncate">{item.observation}</td>
+                        <td className="py-2 px-3 text-neutral-300 text-[11px] font-semibold">{renderSafeString(item.resource)}</td>
+                        <td className="py-2 px-3 text-amber-400 font-bold">{renderSafeString(item.signal_type)}</td>
+                        <td className="py-2 px-3 text-neutral-200 text-xs max-w-md truncate">{renderSafeString(item.observation)}</td>
                         <td className="py-2 px-3 text-center">
                           <span
                             className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
@@ -657,7 +703,7 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                                 : 'bg-neutral-950 text-neutral-400 border border-neutral-800'
                             }`}
                           >
-                            {item.relevance}
+                            {renderSafeString(item.relevance, 'INFO')}
                           </span>
                         </td>
                       </tr>
@@ -691,19 +737,19 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                   {investigation.container_states && investigation.container_states.length > 0 ? (
                     investigation.container_states.map((cs: any, idx: number) => (
                       <tr key={idx} className="hover:bg-neutral-950/60">
-                        <td className="py-2 px-3 font-bold text-neutral-200">{cs.name}</td>
+                        <td className="py-2 px-3 font-bold text-neutral-200">{renderSafeString(cs.name)}</td>
                         <td className="py-2 px-3 text-neutral-400 text-[11px] truncate max-w-xs">
-                          {cs.image}
+                          {renderSafeString(cs.image)}
                         </td>
                         <td className="py-2 px-3">
                           <span className="px-1.5 py-0.5 rounded bg-neutral-950 border border-neutral-800 text-neutral-300">
-                            {cs.state_type}
+                            {renderSafeString(cs.state_type || cs.state)}
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-amber-400 font-bold">{cs.reason || cs.message || '-'}</td>
-                        <td className="py-2 px-3 text-center font-bold text-neutral-200">{cs.restart_count}</td>
+                        <td className="py-2 px-3 text-amber-400 font-bold">{renderSafeString(cs.reason || cs.message)}</td>
+                        <td className="py-2 px-3 text-center font-bold text-neutral-200">{cs.restart_count ?? cs.restarts ?? 0}</td>
                         <td className="py-2 px-3 text-center text-red-400 font-mono font-bold">
-                          {cs.exit_code ? cs.exit_code : '-'}
+                          {cs.exit_code !== undefined && cs.exit_code !== null ? String(cs.exit_code) : '-'}
                         </td>
                       </tr>
                     ))
@@ -741,13 +787,13 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
                             : 'bg-blue-950 text-blue-400 border border-blue-800'
                         }`}
                       >
-                        {evt.type}
+                        {renderSafeString(evt.type, 'Event')}
                       </span>
-                      <span className="font-bold text-neutral-200">{evt.reason}</span>
-                      <span className="text-neutral-400 text-xs">{evt.message}</span>
+                      <span className="font-bold text-neutral-200">{renderSafeString(evt.reason)}</span>
+                      <span className="text-neutral-400 text-xs">{renderSafeString(evt.message)}</span>
                     </div>
                     <div className="text-[10px] text-neutral-500 font-mono shrink-0">
-                      Count: {evt.count}x •{' '}
+                      Count: {evt.count ?? 1}x •{' '}
                       {evt.last_timestamp ? new Date(evt.last_timestamp).toLocaleTimeString() : 'recently'}
                     </div>
                   </div>
@@ -782,10 +828,10 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
 
                 {rawLogs.length > 0 && (
                   <button
-                    onClick={() => handleCopy(rawLogs.join('\n'))}
+                    onClick={() => handleCopy(rawLogs.map((l: any) => renderSafeString(l)).join('\n'))}
                     className="flex items-center gap-1 px-2 py-0.5 bg-neutral-950 border border-neutral-800 rounded text-neutral-300 hover:border-neutral-700 cursor-pointer text-[10px]"
                   >
-                    {copiedText === rawLogs.join('\n') ? (
+                    {copiedText === rawLogs.map((l: any) => renderSafeString(l)).join('\n') ? (
                       <Check className="w-3 h-3 text-emerald-400" />
                     ) : (
                       <Copy className="w-3 h-3 text-neutral-400" />
@@ -798,7 +844,7 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({
 
             <div className="bg-neutral-950 border border-neutral-800 p-3 rounded font-mono text-emerald-400 text-[11px] space-y-1 max-h-72 overflow-y-auto">
               {filteredLogs.length > 0 ? (
-                filteredLogs.map((log: string, i: number) => <div key={i}>{log}</div>)
+                filteredLogs.map((log: any, i: number) => <div key={i}>{renderSafeString(log)}</div>)
               ) : (
                 <div className="text-neutral-600 italic">No logs available for this container state.</div>
               )}

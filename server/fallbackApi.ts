@@ -9,243 +9,64 @@ fallbackRouter.get('/health', (req: Request, res: Response) => {
 
 // Clusters
 fallbackRouter.get('/clusters', (req: Request, res: Response) => {
-  res.json([
-    {
-      id: 1,
-      cluster_id: 'skyops-cluster-prod-us',
-      name: 'prod-us-east-1a',
-      kubernetes_version: 'v1.28.4-gke',
-      status: 'CONNECTED',
-      node_count: 8,
-      pod_count: 142,
-      namespace_count: 12,
-      last_seen: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: 2,
-      cluster_id: 'skyops-cluster-staging-eu',
-      name: 'staging-eu-west-1b',
-      kubernetes_version: 'v1.28.2-gke',
-      status: 'CONNECTED',
-      node_count: 4,
-      pod_count: 68,
-      namespace_count: 8,
-      last_seen: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ]);
+  res.json([]);
 });
 
 fallbackRouter.get('/clusters/:id', (req: Request, res: Response) => {
   const { id } = req.params;
-  res.json({
-    id: 1,
-    cluster_id: id,
-    name: id.includes('prod') ? 'prod-us-east-1a' : 'staging-eu-west-1b',
-    kubernetes_version: 'v1.28.4-gke',
-    status: 'CONNECTED',
-    node_count: 8,
-    pod_count: 142,
-    namespace_count: 12,
-    last_seen: new Date().toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  });
+  res.status(404).json({ detail: `Cluster '${id}' not found` });
 });
 
-// Default Mock Metrics Data
+// Default Metrics Data
 const getDefaultMetrics = (cid: string) => {
   const nowIso = new Date().toISOString();
   return {
     cluster_id: cid,
-    metrics_status: 'ONLINE',
-    status_message: 'Live metrics reported by SkyOps agent (metrics.k8s.io)',
+    metrics_status: 'UNAVAILABLE',
+    status_message: 'No live metrics reported by SkyOps agent yet',
     source: 'metrics.k8s.io',
     last_collected: nowIso,
     summary: {
-      total_cpu_mcores: 32000,
-      used_cpu_mcores: 18400,
-      cpu_utilization_pct: 57.5,
-      total_memory_mb: 131072,
-      used_memory_mb: 84200,
-      memory_utilization_pct: 64.2,
+      total_cpu_mcores: 0,
+      used_cpu_mcores: 0,
+      cpu_utilization_pct: 0,
+      total_memory_mb: 0,
+      used_memory_mb: 0,
+      memory_utilization_pct: 0,
     },
-    nodes: [
-      {
-        name: 'gke-prod-pool-1-8a9d01',
-        cluster_id: cid,
-        status: 'Ready',
-        cpu_usage_mcores: 2400,
-        cpu_capacity_mcores: 4000,
-        cpu_pct: 60,
-        memory_usage_mb: 10500,
-        memory_capacity_mb: 16384,
-        memory_pct: 64,
-      },
-      {
-        name: 'gke-prod-pool-1-8a9d02',
-        cluster_id: cid,
-        status: 'Ready',
-        cpu_usage_mcores: 2200,
-        cpu_capacity_mcores: 4000,
-        cpu_pct: 55,
-        memory_usage_mb: 9800,
-        memory_capacity_mb: 16384,
-        memory_pct: 60,
-      },
-      {
-        name: 'gke-prod-pool-1-8a9d03',
-        cluster_id: cid,
-        status: 'Ready',
-        cpu_usage_mcores: 2800,
-        cpu_capacity_mcores: 4000,
-        cpu_pct: 70,
-        memory_usage_mb: 11200,
-        memory_capacity_mb: 16384,
-        memory_pct: 68,
-      },
-    ],
-    pods: [
-      {
-        name: 'payment-api-worker-7f8d9b',
-        namespace: 'payments',
-        cluster_id: cid,
-        node_name: 'gke-prod-pool-1-8a9d02',
-        cpu_usage_mcores: 480,
-        memory_usage_mb: 820,
-        restarts: 4,
-      },
-      {
-        name: 'catalog-service-5d6c7e',
-        namespace: 'catalog',
-        cluster_id: cid,
-        node_name: 'gke-prod-pool-1-8a9d01',
-        cpu_usage_mcores: 310,
-        memory_usage_mb: 450,
-        restarts: 0,
-      },
-      {
-        name: 'postgres-db-0',
-        namespace: 'database',
-        cluster_id: cid,
-        node_name: 'gke-prod-pool-1-8a9d03',
-        cpu_usage_mcores: 890,
-        memory_usage_mb: 3400,
-        restarts: 0,
-      },
-    ],
+    nodes: [],
+    pods: [],
   };
 };
 
 // Metrics
 fallbackRouter.get('/metrics', (req: Request, res: Response) => {
-  const cid = (req.query.cluster_id as string) || 'skyops-cluster-prod-us';
+  const cid = (req.query.cluster_id as string) || 'none';
   res.json(getDefaultMetrics(cid));
 });
 
 fallbackRouter.get('/metrics/nodes', (req: Request, res: Response) => {
-  const cid = (req.query.cluster_id as string) || 'skyops-cluster-prod-us';
-  res.json(getDefaultMetrics(cid).nodes);
+  res.json([]);
 });
 
 fallbackRouter.get('/metrics/pods', (req: Request, res: Response) => {
-  const cid = (req.query.cluster_id as string) || 'skyops-cluster-prod-us';
-  res.json(getDefaultMetrics(cid).pods);
+  res.json([]);
 });
 
 fallbackRouter.get('/metrics/history', (req: Request, res: Response) => {
-  const cid = (req.query.cluster_id as string) || 'skyops-cluster-prod-us';
+  const cid = (req.query.cluster_id as string) || 'none';
   const range = (req.query.range as string) || '1h';
-
-  const now = Math.floor(Date.now() / 1000);
-  const points = [];
-  for (let i = 11; i >= 0; i--) {
-    const ptDate = new Date((now - i * 300) * 1000);
-    const hours = ptDate.getUTCHours().toString().padStart(2, '0');
-    const mins = ptDate.getUTCMinutes().toString().padStart(2, '0');
-    points.push({
-      timestamp: ptDate.toISOString(),
-      timeLabel: `${hours}:${mins}`,
-      cpu_pct: 57.5 + (Math.random() * 4 - 2),
-      memory_pct: 64.2 + (Math.random() * 2 - 1),
-      cpu_mcores: 18400,
-      memory_mb: 84148,
-    });
-  }
 
   res.json({
     cluster_id: cid,
     time_range: range,
-    metrics_status: 'ONLINE',
-    points,
+    metrics_status: 'UNAVAILABLE',
+    points: [],
   });
 });
 
 // Incidents in-memory store
-const inMemoryIncidents: any[] = [
-  {
-    id: 1,
-    cluster_id: 'skyops-cluster-prod-us',
-    incident_id: 'INC-1042',
-    category: 'OOMKilled',
-    status: 'OPEN',
-    severity: 'CRITICAL',
-    current_state: 'payment-api: OOMKilled (Exit code 137, Restarts: 4)',
-    occurrences: 4,
-    created_at: new Date(Date.now() - 3600000).toISOString(),
-    updated_at: new Date().toISOString(),
-    resource_kind: 'Pod',
-    resource_namespace: 'payments',
-    resource_name: 'payment-api-worker-7f8d9b',
-    resource_uid: 'uid-payment-7f8d9b',
-    diagnosis: {
-      category: 'OOMKilled',
-      severity: 'CRITICAL',
-      confidence: 0.95,
-      reason: 'Process cgroup RSS memory limit exceeded',
-      root_cause: 'Container payment-api hit memory limit 256Mi during payload processing. SIGKILL triggered by cgroup manager.',
-      actionable_recommendation: 'Increase pod memory request to 512Mi and limit to 1Gi in Deployment spec.',
-      mitigation_command: `kubectl patch deployment payment-api-worker -n payments -p '{"spec":{"template":{"spec":{"containers":[{"name":"app","resources":{"limits":{"memory":"1Gi"}}}]}}}}'`,
-    },
-    investigation: {
-      pod_phase: 'Running',
-      node_name: 'gke-prod-pool-1-8a9d02',
-      pod_ip: '10.244.2.191',
-      container_states: [
-        {
-          name: 'payment-api',
-          image: 'registry.internal.net/payments/api:v1.9.0',
-          ready: false,
-          restart_count: 4,
-          state_type: 'terminated',
-          reason: 'OOMKilled',
-          exit_code: 137,
-        },
-      ],
-      kubernetes_events: [
-        { type: 'Warning', reason: 'OOMKilling', message: 'Memory cgroup out of memory: Killed process pid=19420 (node)', count: 4, last_timestamp: new Date().toISOString() },
-      ],
-      recent_logs: [
-        '[WARN] Heap usage reaching 98% threshold',
-        '[FATAL] Out of memory: Kill process 19420 (node)',
-      ],
-      metrics_summary: { cpu_usage_mcores: 180, memory_usage_mb: 256, memory_limit_mb: 256 },
-    },
-    ai_analysis: {
-      status: 'COMPLETED',
-      summary: 'Newly detected OOMKilled crash on payment-api-worker pod.',
-      detailed_explanation: 'Agent telemetry captured kernel SIGKILL exit code 137 on payment-api container.',
-      probable_causes: ['Insufficient container memory limit', 'Memory leak in transaction handler'],
-      remediation_steps: ['Increase container memory limits', 'Analyze heap dumps using pprof'],
-      suggested_kubectl: ['kubectl describe pod payment-api-worker-7f8d9b -n payments'],
-      analyzed_at: new Date().toISOString(),
-    },
-    state_history: ['Pending', 'Running', 'OOMKilled'],
-  },
-];
+const inMemoryIncidents: any[] = [];
 
 fallbackRouter.get('/incidents', (req: Request, res: Response) => {
   const { cluster_id, status } = req.query;

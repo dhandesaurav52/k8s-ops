@@ -77,7 +77,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
 
   const activeClusterName =
     selectedClusterId === 'ALL'
-      ? 'All Clusters (Primary: prod-us)'
+      ? 'All Connected Clusters'
       : clusters.find((c) => c.cluster_id === selectedClusterId)?.name || selectedClusterId;
 
   const isOnline = summary?.metrics_status === 'ONLINE';

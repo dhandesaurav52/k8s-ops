@@ -48,27 +48,6 @@ async def lifespan(app: FastAPI):
         else:
             Base.metadata.create_all(bind=engine)
             logger.info("Database schema verified/created successfully.")
-        
-        # Ensure default seed cluster exists if DB is fresh
-        db = SessionLocal()
-        try:
-            clusters = ClusterService.get_clusters(db)
-            if not clusters:
-                logger.info("Seeding initial cluster in PostgreSQL...")
-                ClusterService.register_or_update_cluster(
-                    db,
-                    ClusterCreate(
-                        cluster_id="skyops-cluster-prod-us",
-                        name="prod-us-east-1a",
-                        status="CONNECTED",
-                        kubernetes_version="v1.28.4-gke",
-                        node_count=8,
-                        pod_count=142,
-                        namespace_count=12,
-                    )
-                )
-        finally:
-            db.close()
     except Exception as e:
         logger.error(f"Failed to initialize database schema: {e}")
     yield
